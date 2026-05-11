@@ -30,8 +30,30 @@ type RoundLog = {
   targetScore: number; holes: HoleData[]; savedAt: string
 }
 
-const ROUND_KEY    = 'golf-loop-round-logs'
-const PRACTICE_KEY = 'golf-loop-practice-logs'
+const ROUND_KEY         = 'golf-loop-round-logs'
+const PRACTICE_KEY      = 'golf-loop-practice-logs'
+const CLUB_DISTANCE_KEY = 'golf-loop-club-distances'
+
+// ─── Club distance types & helpers ──────────────────────────────────────────
+type Skill    = '得意' | '普通' | '苦手'
+type ClubData = {
+  carry: string; total: string; directionMemo: string
+  skill: Skill | ''; notes: string; updatedAt: string
+}
+type ClubDistanceMap = Partial<Record<string, ClubData>>
+type ClubEntry = { club: string; carry: number; total: number; skill: Skill | '' }
+
+function getSortedClubs(map: ClubDistanceMap): ClubEntry[] {
+  return Object.entries(map)
+    .filter(([, d]) => d?.carry)
+    .map(([club, d]) => ({
+      club,
+      carry: Number(d!.carry),
+      total: Number(d!.total) || Number(d!.carry),
+      skill: (d!.skill || '') as Skill | '',
+    }))
+    .sort((a, b) => b.carry - a.carry)
+}
 
 // Practice log type (mirrors practice/page.tsx – do not modify)
 type Category = 'driver' | 'iron' | 'approach' | 'putter'
@@ -643,6 +665,161 @@ function MenuCard({ menu, priority }: { menu: MenuDef; priority: boolean }) {
   )
 }
 
+// ─── Club distance insight section ────────────────────────────────────────────
+function ClubDistanceInsightSection({ entries, issues }: {
+  entries: ClubEntry[]
+  issues:  Issue[]
+}) {
+  const goodClubs = entries.filter(e => e.skill === '得意')
+  const badClubs  = entries.filter(e => e.skill === '苦手')
+
+  // Check coverage in key zones
+  const zones = [
+    { label: '200y以上',  check: (e: ClubEntry) => e.carry >= 200  },
+    { label: '160〜199y', check: (e: ClubEntry) => e.carry >= 160 && e.carry < 200 },
+    { label: '130〜159y', check: (e: ClubEntry) => e.carry >= 130 && e.carry < 160 },
+    { label: '100〜129y', check: (e: ClubEntry) => e.carry >= 100 && e.carry < 130 },
+  ]
+  const uncovered = zones.filter(z => !entries.some(z.check)).map(z => z.label)
+
+  // Build insights from issues + club data
+  const insights: { text: string; color: string }[] = []
+
+  // Driver bad + OB issue
+  const obIssue     = issues.find(i => i.id === 'ob' && i.severity !== 'good')
+  const driverEntry = entries.find(e => e.club === 'ドライバー')
+  const fw3Entry    = entries.find(e => e.club === '3W')
+  if (obIssue && driverEntry?.skill === '苦手') {
+    const alt = fw3Entry ? `3W（キャリー${fw3Entry.carry}y）` : '3W・5W'
+    insights.push({
+      text:  `ドライバーが苦手登録済みです。OBが多い現状を踏まえ、ラウンドでは${alt}への切り替えを積極的に検討しましょう。`,
+      color: TERRACOTTA,
+    })
+  } else if (driverEntry?.skill === '得意') {
+    insights.push({
+      text:  `ドライバーは得意クラブです。ティーショットに自信を持って臨みましょう。`,
+      color: FOREST_LIGHT,
+    })
+  }
+
+  // Bad clubs in approach zone (100-160y) + collapse issue
+  const badApproach = badClubs.filter(e => e.carry >= 100 && e.carry <= 160)
+  const collapseIssue = issues.find(i => i.id === 'collapse' && i.severity !== 'good')
+  if (badApproach.length > 0) {
+    const names = badApproach.map(e => e.club).join('・')
+    const extra = collapseIssue ? '後半崩れの一因になっている可能性があります。' : 'スコアロスを防ぐために前後の番手への切り替えを身につけましょう。'
+    insights.push({
+      text:  `アプローチ距離帯（100〜160y）に苦手クラブ（${names}）があります。${extra}`,
+      color: BOGEY_AMB,
+    })
+  }
+
+  // Good clubs recommendation
+  if (goodClubs.length > 0) {
+    const names = goodClubs.map(e => `${e.club}（${e.carry}y）`).join('・')
+    insights.push({
+      text:  `得意クラブ：${names}。この距離帯のショットは積極的に狙っていきましょう。`,
+      color: FOREST_LIGHT,
+    })
+  }
+
+  // Coverage gap
+  if (uncovered.length > 0) {
+    insights.push({
+      text:  `距離データが未登録のゾーン：${uncovered.join('・')}。練習や計測後に追加すると番手選択の精度が上がります。`,
+      color: MUTED,
+    })
+  }
+
+  if (!insights.length) {
+    insights.push({
+      text:  '番手別飛距離が揃っています。各ラウンドでの番手選択の精度を高めていきましょう。',
+      color: FOREST_MID,
+    })
+  }
+
+  return (
+    <div style={{ backgroundColor: CARD, borderRadius: '12px', boxShadow: '0 2px 12px rgba(28,66,48,0.07)', overflow: 'hidden' }}>
+      <div style={{ height: '3px', backgroundColor: FOREST_MID }} />
+      <div style={{ padding: '16px 16px 18px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+          <div style={{ width: '26px', height: '26px', borderRadius: '6px', backgroundColor: `${FOREST_MID}12`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={FOREST_MID} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="5" y1="22" x2="19" y2="2" />
+              <line x1="15" y1="22" x2="19" y2="22" />
+              <line x1="19" y1="17" x2="19" y2="22" />
+            </svg>
+          </div>
+          <span style={{ fontSize: '13px', fontWeight: 700, color: FOREST }}>距離判断の改善示唆</span>
+          <span style={{ marginLeft: 'auto', fontSize: '11px', color: MUTED }}>登録 {entries.length} 本</span>
+        </div>
+
+        {/* Compact club chips */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginBottom: '14px', padding: '10px 12px', backgroundColor: `${FOREST}06`, borderRadius: '8px' }}>
+          {entries.length > 0 ? entries.map(e => {
+            const good = e.skill === '得意'
+            const bad  = e.skill === '苦手'
+            return (
+              <div key={e.club} style={{
+                display: 'inline-flex', alignItems: 'center', gap: '3px',
+                padding: '3px 8px', borderRadius: '5px', fontSize: '11px',
+                backgroundColor: good ? `${FOREST}14` : bad ? `${TERRACOTTA}12` : CARD,
+                border: `1px solid ${good ? FOREST + '30' : bad ? TERRACOTTA + '35' : SAND_LIGHT}`,
+              }}>
+                <span style={{ fontWeight: 700, color: good ? FOREST : bad ? TERRACOTTA : INK }}>{e.club}</span>
+                <span style={{ color: MUTED }}>{e.carry}y</span>
+                {good && <span style={{ fontSize: '9px', color: FOREST_LIGHT }}>◎</span>}
+                {bad  && <span style={{ fontSize: '9px', color: TERRACOTTA }}>△</span>}
+              </div>
+            )
+          }) : (
+            <span style={{ fontSize: '12px', color: MUTED }}>番手が未登録です</span>
+          )}
+        </div>
+
+        {/* Legend */}
+        {(goodClubs.length > 0 || badClubs.length > 0) && (
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
+            {goodClubs.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: '#fff', backgroundColor: FOREST, borderRadius: '3px', padding: '1px 5px' }}>◎得意</span>
+                <span style={{ fontSize: '11px', color: MUTED }}>{goodClubs.map(e => e.club).join('・')}</span>
+              </div>
+            )}
+            {badClubs.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: '#fff', backgroundColor: TERRACOTTA, borderRadius: '3px', padding: '1px 5px' }}>△苦手</span>
+                <span style={{ fontSize: '11px', color: MUTED }}>{badClubs.map(e => e.club).join('・')}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Insights */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', borderTop: `1px solid ${SAND_LIGHT}`, paddingTop: '12px' }}>
+          {insights.map((ins, i) => (
+            <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+              <div style={{ flexShrink: 0, width: '7px', height: '7px', borderRadius: '50%', backgroundColor: ins.color, marginTop: '5px' }} />
+              <div style={{ fontSize: '13px', color: INK, lineHeight: 1.65 }}>{ins.text}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* CTA */}
+        <Link href="/club-distance" style={{
+          display: 'inline-flex', alignItems: 'center', gap: '4px',
+          marginTop: '14px', fontSize: '12px', color: FOREST, fontWeight: 600, textDecoration: 'none',
+        }}>
+          番手別飛距離を更新する
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={FOREST} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9,18 15,12 9,6" />
+          </svg>
+        </Link>
+      </div>
+    </div>
+  )
+}
+
 // ─── Empty state ──────────────────────────────────────────────────────────────
 function EmptyState() {
   return (
@@ -677,24 +854,28 @@ function MeterBar({ value, max, color, label }: { value: number; max: number; co
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function AnalysisPage() {
-  const [logs,         setLogs]         = useState<RoundLog[]>([])
-  const [practiceLogs, setPracticeLogs] = useState<PracticeLog[]>([])
-  const [ready,        setReady]        = useState(false)
+  const [logs,          setLogs]          = useState<RoundLog[]>([])
+  const [practiceLogs,  setPracticeLogs]  = useState<PracticeLog[]>([])
+  const [clubDistances, setClubDistances] = useState<ClubDistanceMap>({})
+  const [ready,         setReady]         = useState(false)
 
   useEffect(() => {
-    let rounds: RoundLog[] = []
-    let practices: PracticeLog[] = []
+    let rounds:    RoundLog[]      = []
+    let practices: PracticeLog[]   = []
+    let clubs:     ClubDistanceMap = {}
     try {
-      const raw = localStorage.getItem(ROUND_KEY)
+      const raw  = localStorage.getItem(ROUND_KEY)
       rounds = raw ? JSON.parse(raw) : []
-      // ④ 最新ラウンドを優先表示: savedAt降順でソート
       rounds.sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime())
       const rawP = localStorage.getItem(PRACTICE_KEY)
-      practices = rawP ? JSON.parse(rawP) : []
+      practices  = rawP ? JSON.parse(rawP) : []
+      const rawC = localStorage.getItem(CLUB_DISTANCE_KEY)
+      clubs      = rawC ? JSON.parse(rawC) : {}
     } catch {}
     startTransition(() => {
       setLogs(rounds)
       setPracticeLogs(practices)
+      setClubDistances(clubs)
       setReady(true)
     })
   }, [])
@@ -859,7 +1040,30 @@ export default function AnalysisPage() {
               </div>
             )}
 
-            {/* ⑤ 練習ログ × 分析 連携 (requirement 5) */}
+            {/* ⑤ 距離判断の改善示唆 — club distance integration */}
+            {(() => {
+              const entries = getSortedClubs(clubDistances)
+              if (!entries.length) return (
+                <div style={{ backgroundColor: CARD, borderRadius: '12px', boxShadow: '0 2px 12px rgba(28,66,48,0.07)', overflow: 'hidden' }}>
+                  <div style={{ height: '3px', backgroundColor: FOREST_MID }} />
+                  <div style={{ padding: '16px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: FOREST, letterSpacing: '0.06em', marginBottom: '8px' }}>距離判断の改善示唆</div>
+                    <div style={{ fontSize: '13px', color: MUTED, lineHeight: 1.65, marginBottom: '10px' }}>
+                      番手別飛距離を登録すると、ラウンドデータと連携して距離選択の改善示唆が表示されます。
+                    </div>
+                    <Link href="/club-distance" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '13px', color: FOREST, fontWeight: 700, textDecoration: 'none', padding: '9px 16px', borderRadius: '8px', backgroundColor: `${FOREST}0F`, border: `1px solid ${FOREST}20` }}>
+                      番手別飛距離を登録する
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={FOREST} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="9,18 15,12 9,6" />
+                      </svg>
+                    </Link>
+                  </div>
+                </div>
+              )
+              return <ClubDistanceInsightSection entries={entries} issues={issues} />
+            })()}
+
+            {/* ⑥ 練習ログ × 分析 連携 (requirement 5) */}
             {practiceLogs.length > 0 && (() => {
               const lp        = practiceLogs[0]
               const topIssue  = issues.find(i => i.severity !== 'good')

@@ -41,7 +41,39 @@ type RoundPlan = {
   savedAt:      string
 }
 
-const PLAN_KEY = 'golf-loop-round-plans'
+const PLAN_KEY          = 'golf-loop-round-plans'
+const CLUB_DISTANCE_KEY = 'golf-loop-club-distances'
+
+// ─── Club distance types & helpers ──────────────────────────────────────────
+type Skill    = '得意' | '普通' | '苦手'
+type ClubData = {
+  carry: string; total: string; directionMemo: string
+  skill: Skill | ''; notes: string; updatedAt: string
+}
+type ClubDistanceMap = Partial<Record<string, ClubData>>
+type ClubEntry = { club: string; carry: number; total: number; skill: Skill | '' }
+
+function getSortedClubs(map: ClubDistanceMap): ClubEntry[] {
+  return Object.entries(map)
+    .filter(([, d]) => d?.carry)
+    .map(([club, d]) => ({
+      club,
+      carry: Number(d!.carry),
+      total: Number(d!.total) || Number(d!.carry),
+      skill: (d!.skill || '') as Skill | '',
+    }))
+    .sort((a, b) => b.carry - a.carry)
+}
+
+function findClubForDist(yards: number, entries: ClubEntry[]): ClubEntry | null {
+  if (!entries.length) return null
+  const covering = entries.filter(e => e.carry >= yards)
+  return covering.length ? covering[covering.length - 1] : entries[entries.length - 1]
+}
+
+function windAdjY(n: number): number {
+  return n >= 10 ? 25 : n >= 6 ? 15 : n >= 3 ? 7 : 0
+}
 
 // ─── Strategy generation ────────────────────────────────────────────────────
 function hashStr(s: string): number {
@@ -236,6 +268,104 @@ function StratRow({ accent, icon, label, text }: {
   )
 }
 
+// ─── Club advice section (inside strategy card) ──────────────────────────────
+function ClubAdviceSection({ entries, windNum, tempNum }: {
+  entries: ClubEntry[]; windNum: number; tempNum: number
+}) {
+  const KEY_DIST = [100, 130, 150, 170, 200]
+  const windY    = windAdjY(windNum)
+  const isCold   = tempNum <= 10
+  const coldMult = isCold ? 1.07 : 1.0
+  const isAdj    = windY > 0 || isCold
+
+  const clubIcon = (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={FOREST_MID} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="5" y1="22" x2="19" y2="2" />
+      <line x1="15" y1="22" x2="19" y2="22" />
+      <line x1="19" y1="17" x2="19" y2="22" />
+    </svg>
+  )
+
+  if (!entries.length) {
+    return (
+      <div style={{ display: 'flex', gap: '11px', paddingTop: '14px' }}>
+        <div style={{ flexShrink: 0, width: '30px', height: '30px', borderRadius: '8px', backgroundColor: `${MUTED}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {clubIcon}
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: '10px', fontWeight: 700, color: MUTED, letterSpacing: '0.06em', marginBottom: '5px' }}>
+            推奨番手（未登録）
+          </div>
+          <Link href="/club-distance" style={{ fontSize: '12px', color: FOREST, fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+            番手別飛距離を登録すると自動で推奨番手が表示されます
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={FOREST} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9,18 15,12 9,6" />
+            </svg>
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  const recs = KEY_DIST.map(y => {
+    const eff = Math.round((y + windY) * coldMult)
+    const rec = findClubForDist(eff, entries)
+    return rec ? { y, ...rec } : null
+  }).filter(Boolean) as (ClubEntry & { y: number })[]
+
+  const hasGood = recs.some(r => r.skill === '得意')
+  const hasBad  = recs.some(r => r.skill === '苦手')
+
+  return (
+    <div style={{ display: 'flex', gap: '11px', paddingTop: '14px' }}>
+      <div style={{ flexShrink: 0, width: '30px', height: '30px', borderRadius: '8px', backgroundColor: `${FOREST_MID}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {clubIcon}
+      </div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: '10px', fontWeight: 700, color: FOREST_MID, letterSpacing: '0.06em', marginBottom: '7px', display: 'flex', alignItems: 'center', gap: '7px', flexWrap: 'wrap' }}>
+          推奨番手（あなたの飛距離データ）
+          {isAdj && (
+            <span style={{ fontSize: '9px', fontWeight: 600, color: windNum >= 6 ? TERRACOTTA : MUTED, backgroundColor: windNum >= 6 ? `${TERRACOTTA}12` : `${SAND_LIGHT}CC`, borderRadius: '3px', padding: '1px 6px' }}>
+              {windNum >= 6 ? `向かい風+${windY}y補正済み` : '気温補正済み'}
+            </span>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '7px' }}>
+          {recs.map(rec => {
+            const good = rec.skill === '得意'
+            const bad  = rec.skill === '苦手'
+            return (
+              <div key={rec.y} style={{
+                display: 'inline-flex', alignItems: 'center', gap: '3px',
+                padding: '5px 9px', borderRadius: '7px',
+                backgroundColor: good ? `${FOREST}0F` : bad ? `${TERRACOTTA}0F` : `${SAND_LIGHT}80`,
+                border: `1px solid ${good ? FOREST + '28' : bad ? TERRACOTTA + '30' : SAND_LIGHT}`,
+              }}>
+                <span style={{ fontSize: '10px', color: MUTED }}>{rec.y}y</span>
+                <span style={{ fontSize: '10px', color: MUTED, margin: '0 1px' }}>→</span>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: good ? FOREST : bad ? TERRACOTTA : INK }}>
+                  {rec.club}
+                </span>
+                {good && <span style={{ fontSize: '10px', color: FOREST_LIGHT }}>◎</span>}
+                {bad  && <span style={{ fontSize: '10px', color: TERRACOTTA }}>△</span>}
+              </div>
+            )
+          })}
+        </div>
+
+        {(hasGood || hasBad) && (
+          <div style={{ fontSize: '11px', color: MUTED, lineHeight: 1.6 }}>
+            {hasGood && <span style={{ color: FOREST_LIGHT }}>◎得意クラブは積極的に選択。</span>}
+            {hasGood && hasBad && '　'}
+            {hasBad  && <span style={{ color: TERRACOTTA }}>△苦手クラブは前後番手への変更も検討してください。</span>}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // History item
 function HistoryItem({ plan }: { plan: RoundPlan }) {
   const [open, setOpen] = useState(false)
@@ -320,16 +450,23 @@ export default function RoundPlanPage() {
   const [strategy,     setStrategy]     = useState<Strategy | null>(null)
   const [generating,   setGenerating]   = useState(false)
   const [plans,        setPlans]        = useState<RoundPlan[]>([])
-  const [successSheet, setSuccessSheet] = useState(false)
+  const [successSheet,   setSuccessSheet]   = useState(false)
+  const [clubDistances,  setClubDistances]  = useState<ClubDistanceMap>({})
   const stratRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    let parsed: RoundPlan[] = []
+    let parsed: RoundPlan[]    = []
+    let clubs:  ClubDistanceMap = {}
     try {
-      const raw = localStorage.getItem(PLAN_KEY)
-      if (raw) parsed = JSON.parse(raw)
+      const raw  = localStorage.getItem(PLAN_KEY)
+      if (raw)   parsed = JSON.parse(raw)
+      const rawC = localStorage.getItem(CLUB_DISTANCE_KEY)
+      if (rawC)  clubs  = JSON.parse(rawC)
     } catch {}
-    startTransition(() => setPlans(parsed))
+    startTransition(() => {
+      setPlans(parsed)
+      setClubDistances(clubs)
+    })
   }, [])
 
   function handleGenerate() {
@@ -624,6 +761,13 @@ export default function RoundPlanPage() {
                   />
                   <StratRow accent={GOLD} label="メンタルテーマ" text={strategy.mental}
                     icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>}
+                  />
+
+                  {/* Club distance integration */}
+                  <ClubAdviceSection
+                    entries={getSortedClubs(clubDistances)}
+                    windNum={windNum}
+                    tempNum={parseFloat(temperature) || 15}
                   />
                 </div>
               </div>

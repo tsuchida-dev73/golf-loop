@@ -329,6 +329,31 @@ export default function HomePage() {
 
       <main style={{ padding: '14px 16px 100px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
 
+        {/* 番手別飛距離ショートカット */}
+        <Link href="/club-distance" style={{
+          display: 'flex', alignItems: 'center', gap: '12px',
+          backgroundColor: CARD, borderRadius: '12px', padding: '14px 16px',
+          textDecoration: 'none', boxShadow: '0 2px 12px rgba(28,66,48,0.08)',
+        }}>
+          <div style={{
+            width: '42px', height: '42px', borderRadius: '10px', flexShrink: 0,
+            backgroundColor: `${FOREST}0F`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={FOREST} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="5" y1="22" x2="19" y2="2" />
+              <line x1="15" y1="22" x2="19" y2="22" />
+              <line x1="19" y1="17" x2="19" y2="22" />
+            </svg>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '14px', fontWeight: 700, color: INK, marginBottom: '2px' }}>番手別飛距離</div>
+            <div style={{ fontSize: '12px', color: MUTED }}>各クラブのキャリー・トータルを管理</div>
+          </div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9,18 15,12 9,6" />
+          </svg>
+        </Link>
+
         {/* ① 最新の練習テーマ ── golf-loop-practice-logs */}
         <Card>
           <CardHeader

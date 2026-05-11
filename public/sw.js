@@ -1,4 +1,4 @@
-const CACHE_NAME = 'golf-loop-v1'
+const CACHE_NAME = 'golf-loop-v2'
 
 // Static assets to pre-cache on install
 const PRECACHE_URLS = [
@@ -8,6 +8,7 @@ const PRECACHE_URLS = [
   '/round-plan',
   '/analysis',
   '/swing',
+  '/club-distance',
 ]
 
 self.addEventListener('install', (event) => {

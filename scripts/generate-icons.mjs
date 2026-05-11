@@ -43,30 +43,58 @@ function createPNG(size, pixels) {
   return Buffer.concat([sig, chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))])
 }
 
-function golfLoopPixels(x, y, size) {
-  const cx = size / 2, cy = size / 2
-  const dx = x - cx, dy = y - cy
-  const dist = Math.sqrt(dx * dx + dy * dy)
+// Returns positive if P is on the left side of edge (A→B), negative if right
+function edgeSign(px, py, ax, ay, bx, by) {
+  return (px - bx) * (ay - by) - (ax - bx) * (py - by)
+}
 
-  // Corner rounding: treat corners as bg
-  const pad = size * 0.13
-  const rx = Math.min(x, size - 1 - x), ry = Math.min(y, size - 1 - y)
-  if (rx < pad && ry < pad) {
-    const cdx = rx - pad, cdy = ry - pad
-    if (Math.sqrt(cdx*cdx + cdy*cdy) > pad) return [28, 66, 48]  // bg
+// Point-in-triangle test using edge signs
+function inTriangle(px, py, x1, y1, x2, y2, x3, y3) {
+  const d1 = edgeSign(px, py, x1, y1, x2, y2)
+  const d2 = edgeSign(px, py, x2, y2, x3, y3)
+  const d3 = edgeSign(px, py, x3, y3, x1, y1)
+  const hasNeg = (d1 < 0) || (d2 < 0) || (d3 < 0)
+  const hasPos = (d1 > 0) || (d2 > 0) || (d3 > 0)
+  return !(hasNeg && hasPos)
+}
+
+// Design: deep green background, white golf ball (left-center), white flag pole + terracotta flag (right)
+function golfLoopPixels(x, y, size) {
+  const BG    = [28, 66, 48]    // #1C4230 deep forest green
+  const WHITE = [255, 255, 255]
+  const TERRA = [192, 82, 45]   // #C0522D terracotta
+
+  // Rounded corners (18% radius) — outside the squircle stays bg color
+  const cornerR = size * 0.18
+  const rx = Math.min(x, size - 1 - x)
+  const ry = Math.min(y, size - 1 - y)
+  if (rx < cornerR && ry < cornerR) {
+    const dx = cornerR - rx, dy = cornerR - ry
+    if (Math.sqrt(dx * dx + dy * dy) > cornerR) return BG
   }
 
-  // Forest green bg
-  if (dist > size * 0.40) return [28, 66, 48]
+  // Golf ball: circle centered at (38%, 63%), radius 26%
+  const bcx = size * 0.38, bcy = size * 0.63, br = size * 0.26
+  const bdx = x - bcx, bdy = y - bcy
+  if (bdx * bdx + bdy * bdy <= br * br) return WHITE
 
-  // Thin ring (cream border of circle) — outer 3% of circle
-  if (dist > size * 0.37) return [250, 248, 240]  // CREAM
+  // Flag pole: vertical line at x=68%, from y=20% to y=70%, half-width=1.5%
+  const poleX   = size * 0.68
+  const poleTop = size * 0.20
+  const poleBot = size * 0.70
+  const poleHW  = Math.max(2, size * 0.015)
+  if (Math.abs(x - poleX) < poleHW && y >= poleTop && y <= poleBot) return WHITE
 
-  // White circle body
-  if (dist > size * 0.13) return [255, 255, 255]
+  // Terracotta flag: triangle with vertices at pole top, tip (right), pole mid
+  //   A = (poleX, poleTop)
+  //   B = (86% size, 32% size)  — flag tip
+  //   C = (poleX, 44% size)     — bottom of flag on pole
+  const ax = poleX,       ay = poleTop
+  const bx = size * 0.86, by = size * 0.32
+  const cx = poleX,       cy = size * 0.44
+  if (inTriangle(x, y, ax, ay, bx, by, cx, cy)) return TERRA
 
-  // Center: forest green dot (golf hole)
-  return [28, 66, 48]
+  return BG
 }
 
 mkdirSync(join(root, 'public'), { recursive: true })

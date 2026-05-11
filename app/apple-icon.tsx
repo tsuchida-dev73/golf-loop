@@ -13,16 +13,14 @@ export default function AppleIcon() {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}
       >
-        <div
-          style={{
-            width: 110, height: 110, borderRadius: '50%',
-            background: '#FAF8F0',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            border: '5px solid rgba(255,255,255,0.3)',
-          }}
-        >
-          <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#1C4230' }} />
-        </div>
+        <svg width="144" height="144" viewBox="0 0 144 144">
+          {/* Golf ball */}
+          <circle cx="54" cy="96" r="40" fill="white" />
+          {/* Flag pole */}
+          <rect x="95" y="22" width="7" height="82" rx="3.5" fill="white" />
+          {/* Terracotta flag */}
+          <polygon points="102,22 142,44 102,66" fill="#C0522D" />
+        </svg>
       </div>
     ),
     { ...size },
