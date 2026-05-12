@@ -129,6 +129,222 @@ function formatDate(dateStr: string) {
   return `${Number(m)}月${Number(d)}日（${wd[date.getDay()]}）`
 }
 
+// ── Voice input ────────────────────────────────────────────
+type ParsedFields = { theme?: string; good?: string; bad?: string; insight?: string; next?: string }
+
+interface SRInstance {
+  lang: string; continuous: boolean; interimResults: boolean; maxAlternatives: number
+  start(): void; stop(): void; abort(): void
+  onstart: (() => void) | null
+  onresult: ((e: SREvent) => void) | null
+  onerror: ((e: { error: string }) => void) | null
+  onend: (() => void) | null
+}
+interface SREvent {
+  readonly resultIndex: number
+  readonly results: {
+    readonly length: number
+    [i: number]: { readonly isFinal: boolean; [j: number]: { readonly transcript: string } }
+  }
+}
+type SpeechRecognitionCtor = new () => SRInstance
+
+function getSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
+  if (typeof window === 'undefined') return null
+  const w = window as Window & {
+    SpeechRecognition?: SpeechRecognitionCtor
+    webkitSpeechRecognition?: SpeechRecognitionCtor
+  }
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
+}
+
+function parseTranscript(text: string): ParsedFields {
+  type Field = keyof ParsedFields
+  const rules: Array<{ keywords: string[]; field: Field }> = [
+    { field: 'next',    keywords: ['次回', '次は', '次の練習', 'つぎは'] },
+    { field: 'insight', keywords: ['気づい', 'わかっ', '感じ', 'わかりました'] },
+    { field: 'bad',     keywords: ['うまくいかな', 'できなかっ', '悪かっ', 'ミスし', '右に出', '左に出', 'OBし', 'ダフっ', 'トップし'] },
+    { field: 'good',    keywords: ['良かっ', 'よかっ', 'うまくいっ', '改善し', 'よくなっ'] },
+    { field: 'theme',   keywords: ['今日は', 'テーマは', '意識したのは', '今日のテーマ'] },
+  ]
+  const found: Array<{ pos: number; field: Field }> = []
+  for (const rule of rules) {
+    let earliest = Infinity
+    for (const kw of rule.keywords) {
+      const idx = text.indexOf(kw)
+      if (idx !== -1 && idx < earliest) earliest = idx
+    }
+    if (earliest !== Infinity) found.push({ pos: earliest, field: rule.field })
+  }
+  found.sort((a, b) => a.pos - b.pos)
+  if (found.length === 0) return { theme: text.trim() }
+  const result: ParsedFields = {}
+  if (found[0].pos > 0) {
+    const pre = text.slice(0, found[0].pos).trim()
+    if (pre && !found.some(f => f.field === 'theme')) result.theme = pre
+  }
+  for (let i = 0; i < found.length; i++) {
+    result[found[i].field] = text.slice(found[i].pos, found[i + 1]?.pos ?? text.length).trim()
+  }
+  return result
+}
+
+type VoiceStatus = 'idle' | 'listening' | 'done' | 'error'
+
+function VoiceInput({ onApply }: { onApply: (fields: ParsedFields) => void }) {
+  const [status, setStatus] = useState<VoiceStatus>('idle')
+  const [transcript, setTranscript] = useState('')
+  const [errorMsg, setErrorMsg] = useState('')
+  const recRef = useRef<SRInstance | null>(null)
+  const finalRef = useRef('')
+  const [Ctor, setCtor] = useState<SpeechRecognitionCtor | null>(null)
+
+  useEffect(() => {
+    setCtor(getSpeechRecognitionCtor())
+    return () => { recRef.current?.abort() }
+  }, [])
+
+  if (!Ctor) return null
+
+  function start() {
+    if (!Ctor) return
+    finalRef.current = ''
+    setTranscript('')
+    setErrorMsg('')
+    const rec = new Ctor()
+    rec.lang = 'ja-JP'
+    rec.continuous = true
+    rec.interimResults = true
+    rec.maxAlternatives = 1
+    rec.onstart = () => setStatus('listening')
+    rec.onresult = (e) => {
+      let final = finalRef.current
+      let interim = ''
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript
+        if (e.results[i].isFinal) { final += t; finalRef.current = final }
+        else interim += t
+      }
+      setTranscript(final + interim)
+    }
+    rec.onerror = (e) => {
+      if (e.error === 'not-allowed')     { setStatus('error'); setErrorMsg('マイクのアクセスが拒否されました') }
+      else if (e.error === 'audio-capture') { setStatus('error'); setErrorMsg('マイクが見つかりません') }
+      else if (e.error !== 'no-speech')  { setStatus('error'); setErrorMsg(`音声認識エラー: ${e.error}`) }
+    }
+    rec.onend = () => {
+      setStatus(prev => prev !== 'listening' ? prev : finalRef.current ? 'done' : 'idle')
+      if (finalRef.current) setTranscript(finalRef.current)
+    }
+    recRef.current = rec
+    try { rec.start() } catch { setStatus('error'); setErrorMsg('音声認識を開始できませんでした') }
+  }
+
+  function stop()  { recRef.current?.stop() }
+  function apply() { onApply(parseTranscript(transcript)); setStatus('idle'); setTranscript('') }
+  function reset() { recRef.current?.abort(); setStatus('idle'); setTranscript(''); setErrorMsg('') }
+
+  return (
+    <div style={{ backgroundColor: CARD, borderRadius: '12px', boxShadow: '0 2px 12px rgba(28,66,48,0.07)', overflow: 'hidden' }}>
+      <div style={{ width: '100%', height: '3px', backgroundColor: FOREST_LIGHT }} />
+      <div style={{ padding: '18px 16px' }}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+          <div style={{ width: '26px', height: '26px', borderRadius: '6px', backgroundColor: `${FOREST_LIGHT}18`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={FOREST_LIGHT} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="23"/>
+              <line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+          </div>
+          <span style={{ fontSize: '12px', fontWeight: 700, color: FOREST, letterSpacing: '0.06em' }}>音声入力</span>
+        </div>
+
+        {/* Idle */}
+        {status === 'idle' && (
+          <button onClick={start} style={{
+            width: '100%', padding: '13px 16px', borderRadius: '10px', backgroundColor: FOREST_LIGHT,
+            border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', gap: '8px', color: '#FFFFFF', fontSize: '14px', fontWeight: 600,
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="23"/>
+              <line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+            マイクでまとめて入力
+          </button>
+        )}
+
+        {/* Listening */}
+        {status === 'listening' && (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+              <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: TERRACOTTA, animation: 'voicePulse 1s infinite' }} />
+              <span style={{ fontSize: '13px', color: TERRACOTTA, fontWeight: 600 }}>聞き取り中...</span>
+              <button onClick={stop} style={{ marginLeft: 'auto', fontSize: '12px', color: MUTED, background: 'none', border: `1px solid ${SAND_LIGHT}`, borderRadius: '6px', padding: '4px 10px', cursor: 'pointer' }}>
+                停止
+              </button>
+            </div>
+            <div style={{ fontSize: '13px', lineHeight: 1.65, backgroundColor: CREAM, borderRadius: '8px', padding: '12px', border: `1px solid ${SAND_LIGHT}`, minHeight: '52px', color: transcript ? INK : MUTED, fontStyle: transcript ? 'normal' : 'italic' }}>
+              {transcript || '練習内容を話してください...'}
+            </div>
+          </div>
+        )}
+
+        {/* Done */}
+        {status === 'done' && (
+          <div>
+            <div style={{ fontSize: '12px', color: MUTED, marginBottom: '8px', fontWeight: 600 }}>認識結果（修正できます）</div>
+            <textarea
+              value={transcript}
+              onChange={(e) => setTranscript(e.target.value)}
+              style={{ width: '100%', minHeight: '80px', padding: '12px', borderRadius: '8px', border: `1.5px solid ${SAND_LIGHT}`, backgroundColor: CREAM, color: INK, fontSize: '13px', lineHeight: 1.65, resize: 'none', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
+              onFocus={(e) => (e.currentTarget.style.borderColor = FOREST_MID)}
+              onBlur={(e) => (e.currentTarget.style.borderColor = SAND_LIGHT)}
+            />
+            <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+              <button onClick={apply} style={{ flex: 1, padding: '11px', borderRadius: '8px', backgroundColor: FOREST, border: 'none', cursor: 'pointer', color: '#FFFFFF', fontSize: '13px', fontWeight: 600 }}>
+                入力欄に反映する
+              </button>
+              <button onClick={reset} style={{ padding: '11px 14px', borderRadius: '8px', background: 'none', border: `1.5px solid ${SAND_LIGHT}`, cursor: 'pointer', color: MUTED, fontSize: '13px' }}>
+                やり直す
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Error */}
+        {status === 'error' && (
+          <div>
+            <div style={{ fontSize: '13px', color: TERRACOTTA, marginBottom: '10px' }}>{errorMsg}</div>
+            {transcript && (
+              <div>
+                <div style={{ fontSize: '12px', color: MUTED, marginBottom: '6px', fontWeight: 600 }}>認識できたテキスト</div>
+                <textarea
+                  value={transcript}
+                  onChange={(e) => setTranscript(e.target.value)}
+                  style={{ width: '100%', minHeight: '60px', padding: '12px', borderRadius: '8px', border: `1.5px solid ${SAND_LIGHT}`, backgroundColor: CREAM, color: INK, fontSize: '13px', lineHeight: 1.65, resize: 'none', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
+                />
+                <button onClick={apply} style={{ marginTop: '8px', width: '100%', padding: '11px', borderRadius: '8px', backgroundColor: FOREST, border: 'none', cursor: 'pointer', color: '#FFFFFF', fontSize: '13px', fontWeight: 600 }}>
+                  入力欄に反映する
+                </button>
+              </div>
+            )}
+            <button onClick={reset} style={{ marginTop: '8px', fontSize: '12px', color: MUTED, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+              閉じる
+            </button>
+          </div>
+        )}
+      </div>
+      <style>{`@keyframes voicePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.4;transform:scale(0.8)}}`}</style>
+    </div>
+  )
+}
+
 // ── Sub-components ─────────────────────────────────────────
 function AutoTextarea({ placeholder, value, onChange }: {
   placeholder: string; value: string; onChange: (v: string) => void
@@ -330,6 +546,14 @@ export default function PracticePage() {
     if (updated.length === 0) setInsightReady(false)
   }
 
+  function applyVoiceInput(fields: ParsedFields) {
+    if (fields.theme   !== undefined) setTheme(fields.theme)
+    if (fields.good    !== undefined) setGood(fields.good)
+    if (fields.bad     !== undefined) setBad(fields.bad)
+    if (fields.insight !== undefined) setInsight(fields.insight)
+    if (fields.next    !== undefined) setNext(fields.next)
+  }
+
   const insight2 = insightReady ? generateInsight(logs) : null
   const displayedLogs = showAll ? logs : logs.slice(0, 5)
 
@@ -400,6 +624,8 @@ export default function PracticePage() {
       )}
 
       <main style={{ padding: '18px 16px 110px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+
+        <VoiceInput onApply={applyVoiceInput} />
 
         {/* ─── Form ─── */}
         <SectionCard accentColor={FOREST}>
