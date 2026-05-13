@@ -500,7 +500,7 @@ export default function RoundPlanPage() {
 
       {/* Header */}
       <header style={{ backgroundColor: FOREST, padding: '52px 20px 22px' }}>
-        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px', letterSpacing: '0.15em', marginBottom: '6px', fontWeight: 500 }}>GOLF LOOP</div>
+        <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: '12px', letterSpacing: '0.28em', marginBottom: '8px', fontWeight: 400, fontFamily: "Georgia, 'Times New Roman', serif" }}>GOLF LOOP</div>
         <h1 style={{ color: '#fff', fontSize: '22px', fontWeight: 700, margin: 0, lineHeight: 1.3 }}>ラウンド準備</h1>
         <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: '13px', margin: '4px 0 0' }}>当日の戦略をまとめて万全の準備を</p>
       </header>

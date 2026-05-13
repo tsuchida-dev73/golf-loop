@@ -282,42 +282,43 @@ export default function HomePage() {
     <div style={{ maxWidth: '480px', margin: '0 auto', minHeight: '100dvh', backgroundColor: CREAM }}>
 
       {/* Header */}
-      <header style={{ backgroundColor: FOREST, padding: '52px 20px 20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px', letterSpacing: '0.15em', marginBottom: '6px', fontWeight: 500 }}>
-              GOLF LOOP
-            </div>
-            <h1 style={{ color: '#FFFFFF', fontSize: '22px', fontWeight: 700, margin: 0, lineHeight: 1.3 }}>
-              おはようございます
-            </h1>
-            <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: '13px', marginTop: '4px' }}>
-              {mounted ? todayLabel : ''}
-            </div>
-          </div>
-          <button
-            style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.1)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '4px' }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-            </svg>
-          </button>
-        </div>
+      <header style={{ backgroundColor: FOREST, padding: '52px 20px 22px' }}>
+        <h1 style={{ color: '#FFFFFF', fontSize: '28px', fontWeight: 700, margin: '0 0 5px', lineHeight: 1.15, letterSpacing: '0.12em', fontFamily: "Georgia, 'Times New Roman', serif" }}>
+          GOLF LOOP
+        </h1>
+        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px', margin: '0 0 18px', letterSpacing: '0.04em' }}>
+          練習・ラウンド・分析をつなぐ
+        </p>
 
         {mounted && (
-          <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: '20px', padding: '5px 14px' }}>
               <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#7ECB9E' }} />
               <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: '12px', fontWeight: 500 }}>
                 今月の練習 {practiceThisMonth}回
               </span>
             </div>
-            {daysSinceRound !== null && (
+            {latestPractice?.theme && (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: '20px', padding: '5px 14px', maxWidth: '170px' }}>
+                <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#A8E6C8', flexShrink: 0 }} />
+                <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {latestPractice.theme}
+                </span>
+              </div>
+            )}
+            {latestPlan && daysUntil(latestPlan.date) >= 0 && (
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: '20px', padding: '5px 14px' }}>
                 <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#F9C74F' }} />
                 <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: '12px', fontWeight: 500 }}>
-                  最終ラウンド {daysSinceRound === 0 ? '今日' : `${daysSinceRound}日前`}
+                  次回 {daysUntil(latestPlan.date)}日後
+                </span>
+              </div>
+            )}
+            {latestRound && (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: '20px', padding: '5px 14px' }}>
+                <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#90C4F9' }} />
+                <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: '12px', fontWeight: 500 }}>
+                  前回 {calcRoundStats(latestRound).score}打
                 </span>
               </div>
             )}
