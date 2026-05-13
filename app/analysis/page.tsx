@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, startTransition } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import BottomNav from '../components/BottomNav'
 
@@ -864,34 +864,58 @@ export default function AnalysisPage() {
     let practices: PracticeLog[]   = []
     let clubs:     ClubDistanceMap = {}
     try {
-      const raw  = localStorage.getItem(ROUND_KEY)
-      rounds = raw ? JSON.parse(raw) : []
-      rounds.sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime())
-      const rawP = localStorage.getItem(PRACTICE_KEY)
-      practices  = rawP ? JSON.parse(rawP) : []
-      const rawC = localStorage.getItem(CLUB_DISTANCE_KEY)
-      clubs      = rawC ? JSON.parse(rawC) : {}
+      const raw = localStorage.getItem(ROUND_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) {
+          rounds = parsed
+          rounds.sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime())
+        }
+      }
     } catch {}
-    startTransition(() => {
-      setLogs(rounds)
-      setPracticeLogs(practices)
-      setClubDistances(clubs)
-      setReady(true)
-    })
+    try {
+      const rawP = localStorage.getItem(PRACTICE_KEY)
+      if (rawP) {
+        const parsed = JSON.parse(rawP)
+        if (Array.isArray(parsed)) practices = parsed
+      }
+    } catch {}
+    try {
+      const rawC = localStorage.getItem(CLUB_DISTANCE_KEY)
+      if (rawC) {
+        const parsed = JSON.parse(rawC)
+        if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) clubs = parsed
+      }
+    } catch {}
+    setLogs(rounds)
+    setPracticeLogs(practices)
+    setClubDistances(clubs)
+    setReady(true)
   }, [])
 
   const hasData = logs.length > 0
-  const latest  = hasData ? roundStats(logs[0]) : null
-  const recent3 = logs.slice(0, 3).map(roundStats)
-  const issues  = hasData ? buildIssues(logs) : []
-  const aiComment = hasData ? buildAIComment(logs, issues) : null
-  const criticalIds = issues.filter(i => i.severity !== 'good').map(i => i.id)
-  const priorityMenus = new Set(MENUS.filter(m => m.relatedIssueIds.some(id => criticalIds.includes(id))).map(m => m.id))
 
-  const avgScore  = avg(recent3.map(s => s.score))
-  const avgPutts  = avg(recent3.map(s => s.putts))
-  const avgObs    = avg(recent3.map(s => s.obs))
-  const avgFwPct  = avg(recent3.map(s => s.fwPct))
+  let latest:       RoundStats | null = null
+  let recent3:      RoundStats[]      = []
+  let issues:       Issue[]           = []
+  let aiComment:    AIComment | null  = null
+  let avgScore  = 0, avgPutts = 0, avgObs = 0, avgFwPct = 0
+
+  if (hasData) {
+    try {
+      latest    = roundStats(logs[0])
+      recent3   = logs.slice(0, 3).map(roundStats)
+      issues    = buildIssues(logs)
+      aiComment = buildAIComment(logs, issues)
+      avgScore  = avg(recent3.map(s => s.score))
+      avgPutts  = avg(recent3.map(s => s.putts))
+      avgObs    = avg(recent3.map(s => s.obs))
+      avgFwPct  = avg(recent3.map(s => s.fwPct))
+    } catch {}
+  }
+
+  const criticalIds   = issues.filter(i => i.severity !== 'good').map(i => i.id)
+  const priorityMenus = new Set(MENUS.filter(m => m.relatedIssueIds.some(id => criticalIds.includes(id))).map(m => m.id))
 
   return (
     <div style={{ maxWidth: '480px', margin: '0 auto', minHeight: '100dvh', backgroundColor: CREAM }}>
