@@ -200,7 +200,8 @@ function VoiceInput({ onApply }: { onApply: (fields: ParsedFields) => void }) {
   const [Ctor, setCtor] = useState<SpeechRecognitionCtor | null>(null)
 
   useEffect(() => {
-    setCtor(getSpeechRecognitionCtor())
+    const ctor = getSpeechRecognitionCtor()
+    setCtor(() => ctor)
     return () => { recRef.current?.abort() }
   }, [])
 
