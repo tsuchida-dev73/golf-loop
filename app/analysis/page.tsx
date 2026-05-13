@@ -223,6 +223,116 @@ function buildIssues(logs: RoundLog[]): Issue[] {
   return issues.sort((a, b) => sevOrder(a.severity) - sevOrder(b.severity))
 }
 
+// ─── Today's challenges ───────────────────────────────────────────────────────
+type Challenge = {
+  title:    string
+  evidence: string
+  practice: string
+  awareness: string
+}
+
+function buildTodayChallenges(log: RoundLog): Challenge[] {
+  const hs         = log.holes.slice(0, 18)
+  const putts      = hs.reduce((s, h) => s + h.putts, 0)
+  const threePutts = hs.filter(h => h.putts >= 3).length
+  const obs        = hs.filter(h => h.teeShot === 'OB').length
+  const rights     = hs.filter(h => h.teeShot === '右').length
+  const lefts      = hs.filter(h => h.teeShot === '左').length
+  const fws        = hs.filter(h => h.teeShot === 'FW').length
+  const fwPct      = Math.round((fws / 18) * 100)
+  const front9diff = hs.slice(0, 9).reduce((s, h) => s + h.score - h.par, 0)
+  const back9diff  = hs.slice(9).reduce((s, h) => s + h.score - h.par, 0)
+  const collapse   = back9diff - front9diff
+  const par3s      = hs.filter(h => h.par === 3)
+  const par3doubles = par3s.filter(h => h.score - h.par >= 2).length
+  const par5s      = hs.filter(h => h.par === 5)
+  const par5bogeys = par5s.filter(h => h.score - h.par >= 2).length
+
+  type Scored = Challenge & { score: number }
+  const cands: Scored[] = []
+
+  // Putts / 3-putts
+  if (putts >= 37 || threePutts >= 4) {
+    cands.push({ title: 'パター距離感',
+      evidence:  `合計パット${putts}、3パット${threePutts}回`,
+      practice:  'ロングパット距離感10分（5m・10m・15m各5球）、1mパット20球',
+      awareness: 'ファーストパットは「カップ1m手前」に止める距離感を意識。3パット防止最優先',
+      score: putts >= 37 ? 3 : 2 })
+  } else if (threePutts >= 2 || putts >= 34) {
+    cands.push({ title: 'パター精度',
+      evidence:  `合計パット${putts}、3パット${threePutts}回`,
+      practice:  'ショートパット反復（1.5〜3m）、距離感ドリル',
+      awareness: 'ミス後こそルーティーンを守り、次のパットに集中する',
+      score: 2 })
+  }
+
+  // OB / direction
+  if (obs >= 2) {
+    const dir  = rights >= lefts ? '右' : '左'
+    const safe = dir === '右' ? '左' : '右'
+    cands.push({ title: `ドライバー${dir}ミス`,
+      evidence:  `右ミス${rights}回、左ミス${lefts}回、OB${obs}回`,
+      practice:  'アライメント確認ドリル、フェース管理、3/4スイング練習',
+      awareness: `コースの${safe}広い側へアドレス。OBより1打ロスでも安全優先`,
+      score: 3 })
+  } else if (rights >= 3) {
+    cands.push({ title: 'ドライバー右ミス傾向',
+      evidence:  `右ミス${rights}回（OB${obs}回）`,
+      practice:  'フェース向き確認ドリル、インサイドから振り出す練習',
+      awareness: '目標より少し左を向いてアドレス。フォローは左へ振り抜く',
+      score: 2 })
+  } else if (lefts >= 3) {
+    cands.push({ title: 'ドライバー左ミス傾向',
+      evidence:  `左ミス${lefts}回（OB${obs}回）`,
+      practice:  'アウトサイドイン矯正ドリル、フェース向き確認',
+      awareness: 'インサイドから振り出す意識。フォローは右へ振り抜く',
+      score: 2 })
+  } else if (fwPct < 40) {
+    cands.push({ title: 'フェアウェイキープ率',
+      evidence:  `FW率${fwPct}%（目標55%以上）`,
+      practice:  '3WやUTのティーショット練習、安定重視のセットアップ',
+      awareness: 'ドライバーより3Wを積極使用。確実なフェアウェイキープを選択',
+      score: 2 })
+  }
+
+  // Back-9 collapse
+  if (collapse >= 5) {
+    cands.push({ title: '後半崩れ',
+      evidence:  `前半${front9diff >= 0 ? '+' : ''}${front9diff}、後半${back9diff >= 0 ? '+' : ''}${back9diff}（差${collapse > 0 ? '+' : ''}${collapse}打）`,
+      practice:  'アプローチ距離感練習、後半集中力維持のルーティーン強化',
+      awareness: '後半はパー狙いよりボギー死守。10番を新ゲームのスタートと捉える',
+      score: collapse >= 7 ? 3 : 2 })
+  } else if (collapse >= 3) {
+    cands.push({ title: '後半スコア安定',
+      evidence:  `前半${front9diff >= 0 ? '+' : ''}${front9diff}、後半${back9diff >= 0 ? '+' : ''}${back9diff}`,
+      practice:  'ラウンド後半シミュレーション、アプローチ精度向上',
+      awareness: '後半は1ホールずつリセット。スコアより次のショットに集中',
+      score: 2 })
+  }
+
+  // Par3 accuracy (only when par-3 holes actually recorded)
+  if (par3s.length >= 3 && par3doubles >= 2) {
+    cands.push({ title: 'アイアン精度（パー3）',
+      evidence:  `パー3でダブルボギー以上${par3doubles}回（${par3s.length}ホール中）`,
+      practice:  '中〜長アイアンの方向性練習、正確なクラブ選択と距離計算',
+      awareness: 'パー3はグリーンセンター狙い。ショートサイドへのミスを避ける',
+      score: par3doubles >= 3 ? 3 : 2 })
+  }
+
+  // Par5 management (only when par-5 holes actually recorded)
+  if (par5s.length >= 3 && par5bogeys >= Math.ceil(par5s.length * 0.6)) {
+    cands.push({ title: 'パー5マネジメント',
+      evidence:  `パー5でダブルボギー以上${par5bogeys}回（${par5s.length}ホール中）`,
+      practice:  '3打目勝負のレイアップ練習、パー5の番手選択シミュレーション',
+      awareness: '2打目は無理せずレイアップ。確実な3打目でボギーを確保',
+      score: 2 })
+  }
+
+  return cands
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+}
+
 // ─── AI comment ───────────────────────────────────────────────────────────────
 type AIComment = { issue: string; practice: string; round: string }
 
@@ -601,6 +711,72 @@ function CommentRow({ accent, icon, label, text }: {
   )
 }
 
+// ─── Today's challenges components ────────────────────────────────────────────
+function ChallengeItem({ challenge, rank }: { challenge: Challenge; rank: number }) {
+  const isTop       = rank === 1
+  const accentColor = rank === 1 ? TERRACOTTA : rank === 2 ? BOGEY_AMB : MUTED
+  const rows = [
+    { key: '根拠', text: challenge.evidence,  keyColor: isTop ? 'rgba(255,255,255,0.6)' : MUTED    },
+    { key: '練習', text: challenge.practice,  keyColor: isTop ? 'rgba(255,255,255,0.6)' : FOREST   },
+    { key: '意識', text: challenge.awareness, keyColor: isTop ? 'rgba(255,255,255,0.6)' : GOLD     },
+  ]
+  return (
+    <div style={{
+      borderRadius: '10px',
+      backgroundColor: isTop ? TERRACOTTA : CARD,
+      border: isTop ? 'none' : `1.5px solid ${SAND_LIGHT}`,
+      overflow: 'hidden',
+      marginBottom: '8px',
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '9px', padding: '10px 14px',
+        borderBottom: `1px solid ${isTop ? 'rgba(255,255,255,0.18)' : SAND_LIGHT}`,
+      }}>
+        <div style={{
+          width: '22px', height: '22px', borderRadius: '50%', flexShrink: 0,
+          backgroundColor: isTop ? 'rgba(255,255,255,0.22)' : `${accentColor}14`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <span style={{ fontSize: '11px', fontWeight: 700, color: isTop ? '#fff' : accentColor }}>{rank}</span>
+        </div>
+        <span style={{ fontSize: '14px', fontWeight: 700, color: isTop ? '#fff' : INK, flex: 1 }}>
+          {challenge.title}
+        </span>
+        {rank === 1 && (
+          <span style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(255,255,255,0.8)', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: '4px', padding: '2px 6px', letterSpacing: '0.06em' }}>
+            最優先
+          </span>
+        )}
+      </div>
+      <div style={{ padding: '10px 14px 12px', display: 'flex', flexDirection: 'column', gap: '7px' }}>
+        {rows.map(({ key, text, keyColor }) => (
+          <div key={key} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+            <span style={{ fontSize: '10px', fontWeight: 700, color: keyColor, flexShrink: 0, lineHeight: '18px', minWidth: '24px' }}>{key}</span>
+            <span style={{ fontSize: '12px', color: isTop ? 'rgba(255,255,255,0.88)' : INK, lineHeight: 1.6 }}>{text}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function TodayChallengesCard({ challenges, hasLimitedData }: { challenges: Challenge[]; hasLimitedData: boolean }) {
+  if (challenges.length === 0) return null
+  return (
+    <SectionCard accent={TERRACOTTA} title="今日の課題 TOP3">
+      {challenges.map((c, i) => <ChallengeItem key={i} challenge={c} rank={i + 1} />)}
+      {(hasLimitedData || challenges.length < 3) && (
+        <div style={{
+          padding: '9px 12px', backgroundColor: `${MUTED}08`, borderRadius: '8px',
+          fontSize: '12px', color: MUTED, lineHeight: 1.6,
+        }}>
+          ティーショット方向を記録すると、次回から方向性課題の分析精度が上がります
+        </div>
+      )}
+    </SectionCard>
+  )
+}
+
 // Improvement menu card
 type MenuDef = {
   id: string; title: string; subtitle: string
@@ -893,11 +1069,13 @@ export default function AnalysisPage() {
 
   const hasData = logs.length > 0
 
-  let latest:       RoundStats | null = null
-  let recent3:      RoundStats[]      = []
-  let issues:       Issue[]           = []
-  let aiComment:    AIComment | null  = null
+  let latest:         RoundStats | null = null
+  let recent3:        RoundStats[]      = []
+  let issues:         Issue[]           = []
+  let aiComment:      AIComment | null  = null
   let avgScore  = 0, avgPutts = 0, avgObs = 0, avgFwPct = 0
+  let challenges:     Challenge[]       = []
+  let hasLimitedData  = false
 
   if (hasData) {
     try {
@@ -909,6 +1087,9 @@ export default function AnalysisPage() {
       avgPutts  = avg(recent3.map(s => s.putts))
       avgObs    = avg(recent3.map(s => s.obs))
       avgFwPct  = avg(recent3.map(s => s.fwPct))
+      challenges     = buildTodayChallenges(logs[0])
+      const hs0      = logs[0].holes.slice(0, 18)
+      hasLimitedData = hs0.filter(h => h.teeShot !== null).length < 9
     } catch {}
   }
 
@@ -969,7 +1150,10 @@ export default function AnalysisPage() {
               </div>
             </SectionCard>
 
-            {/* ② 推移グラフ（直近5ラウンド） */}
+            {/* ② 今日の課題 TOP3 */}
+            <TodayChallengesCard challenges={challenges} hasLimitedData={hasLimitedData} />
+
+            {/* ③ 推移グラフ（直近5ラウンド） */}
             <SectionCard accent={FOREST_MID} title="推移グラフ（直近5ラウンド）">
               <TrendChartsSection logs={logs} />
             </SectionCard>

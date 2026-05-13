@@ -570,6 +570,11 @@ export default function RoundPage() {
               <div style={{ fontSize: '17px', fontWeight: 700, color: '#1C1C1C' }}>ラウンドを保存しました</div>
               <div style={{ fontSize: '13px', color: '#6B7060', marginTop: '4px' }}>続けて何をしますか？</div>
             </div>
+            <Link href="/analysis" onClick={() => setSuccessSheet(false)} style={{
+              display: 'block', textAlign: 'center', padding: '14px', borderRadius: '12px',
+              backgroundColor: TERRACOTTA, color: '#fff', fontSize: '14px', fontWeight: 700,
+              textDecoration: 'none', marginBottom: '16px',
+            }}>今日の課題を見る</Link>
             <div style={{ fontSize: '11px', fontWeight: 700, color: '#6B7060', letterSpacing: '0.08em', marginBottom: '10px' }}>次のステップ</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {[

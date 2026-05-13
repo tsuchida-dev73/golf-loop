@@ -448,8 +448,8 @@ export default function RoundLivePage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <Link href="/analysis" style={{
               display: 'block', textAlign: 'center', padding: '16px', borderRadius: '12px',
-              backgroundColor: FOREST, color: '#fff', fontSize: '15px', fontWeight: 700, textDecoration: 'none',
-            }}>分析を見る</Link>
+              backgroundColor: TERRACOTTA, color: '#fff', fontSize: '15px', fontWeight: 700, textDecoration: 'none',
+            }}>今日の課題を見る</Link>
             <Link href="/" style={{
               display: 'block', textAlign: 'center', padding: '14px', borderRadius: '12px',
               border: `1.5px solid ${SAND_LIGHT}`, color: MUTED, fontSize: '14px', textDecoration: 'none',
