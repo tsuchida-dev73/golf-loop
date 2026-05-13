@@ -333,6 +333,58 @@ function buildTodayChallenges(log: RoundLog): Challenge[] {
     .slice(0, 3)
 }
 
+// ─── Practice menu ────────────────────────────────────────────────────────────
+type PracticeMenu = {
+  theme: string
+  min30: string[]
+  min60: string[]
+  doNot: string[]
+}
+
+function getMin30Drills(title: string): string[] {
+  if (title.includes('パター'))
+    return ['1mパット 20球', '5m距離感ドリル 10球', '10m距離感ドリル 10球']
+  if (title.includes('ドライバー') || title.includes('OB'))
+    return ['アライメント確認・セットアップ 10分', 'ハーフスイングで方向性練習 20球', 'フェース管理ドリル 10球']
+  if (title.includes('フェアウェイ'))
+    return ['3WでFWキープ練習 15球', 'UTコントロール 10球', 'ドライバーは最後の5球のみ']
+  if (title.includes('後半'))
+    return ['アプローチ30yd以内 20球', 'ルーティーン徹底練習（全球）', '疲労想定の力み対策 — フィニッシュ確認']
+  if (title.includes('アイアン'))
+    return ['7I・8I距離感練習 20球', 'フラッグ向け方向性 10球', '6Iで精度確認 10球']
+  if (title.includes('パー5') || title.includes('マネジメント'))
+    return ['3W・UTコントロール 15球', 'アプローチ50〜80yd 15球', '番手選択シミュレーション']
+  return ['課題クラブ集中練習 20球', 'ルーティーン確認（全球必ず）', 'コース想定の距離感練習']
+}
+
+function getBlockName(title: string): string {
+  if (title.includes('パター'))                                   return 'パター距離感'
+  if (title.includes('ドライバー') || title.includes('フェアウェイ')) return 'ドライバー方向性'
+  if (title.includes('後半'))                                     return 'アプローチ & ルーティーン'
+  if (title.includes('アイアン'))                                  return 'アイアン精度'
+  if (title.includes('パー5') || title.includes('マネジメント'))    return 'マネジメント練習'
+  return title
+}
+
+function buildPracticeMenu(challenges: Challenge[]): PracticeMenu | null {
+  if (challenges.length === 0) return null
+  const theme   = challenges[0].title
+  const min30   = getMin30Drills(theme)
+  const n       = challenges.length
+  const tBlock  = n === 1 ? 30 : n === 2 ? 25 : 20
+  const min60   = challenges.map(c => `${getBlockName(c.title)} ${tBlock}分`)
+  if (n < 3) min60.push(`ウォームアップ・クールダウン ${60 - tBlock * n}分`)
+  const doNot: string[] = []
+  if (n >= 2)                         doNot.push('課題が多くても一度に全部直そうとしない')
+  if (theme.includes('パター'))        doNot.push('今日はスイング改造なし。距離感だけに集中')
+  else if (theme.includes('ドライバー') || theme.includes('フェアウェイ'))
+                                      doNot.push('飛距離は二の次。方向性だけを意識する')
+  else if (theme.includes('後半'))     doNot.push('長時間連続練習は逆効果。集中できる時間だけ')
+  else if (theme.includes('アイアン')) doNot.push('番手をコロコロ変えず1〜2本に集中')
+  else                                doNot.push('今日の課題以外のクラブは最小限に')
+  return { theme, min30, min60, doNot }
+}
+
 // ─── AI comment ───────────────────────────────────────────────────────────────
 type AIComment = { issue: string; practice: string; round: string }
 
@@ -777,6 +829,56 @@ function TodayChallengesCard({ challenges, hasLimitedData }: { challenges: Chall
   )
 }
 
+// Practice menu components
+function MenuBlock({ label, items, numColor }: { label: string; items: string[]; numColor: string }) {
+  return (
+    <>
+      <div style={{ fontSize: '11px', fontWeight: 700, color: FOREST, letterSpacing: '0.06em', marginBottom: '7px' }}>{label}</div>
+      {items.map((item, i) => (
+        <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', marginBottom: i < items.length - 1 ? '5px' : 0 }}>
+          <span style={{ fontSize: '11px', fontWeight: 700, color: numColor, flexShrink: 0, lineHeight: '18px', minWidth: '14px' }}>{i + 1}.</span>
+          <span style={{ fontSize: '13px', color: INK, lineHeight: 1.55 }}>{item}</span>
+        </div>
+      ))}
+    </>
+  )
+}
+
+function PracticeMenuCard({ menu }: { menu: PracticeMenu }) {
+  return (
+    <SectionCard accent={FOREST_LIGHT} title="今日の練習メニュー">
+      {/* 重点テーマ */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '8px',
+        padding: '9px 12px', backgroundColor: `${TERRACOTTA}0E`, borderRadius: '8px',
+        marginBottom: '14px', border: `1px solid ${TERRACOTTA}22`,
+      }}>
+        <span style={{ fontSize: '10px', fontWeight: 700, color: TERRACOTTA, flexShrink: 0 }}>重点テーマ</span>
+        <span style={{ fontSize: '14px', fontWeight: 700, color: TERRACOTTA }}>{menu.theme}</span>
+      </div>
+
+      {/* 30分 */}
+      <MenuBlock label="30分メニュー" items={menu.min30} numColor={FOREST} />
+
+      {/* 60分 */}
+      <div style={{ borderTop: `1px solid ${SAND_LIGHT}`, paddingTop: '12px', marginTop: '12px' }}>
+        <MenuBlock label="60分メニュー" items={menu.min60} numColor={FOREST_MID} />
+      </div>
+
+      {/* やらないこと */}
+      <div style={{ borderTop: `1px solid ${SAND_LIGHT}`, paddingTop: '12px', marginTop: '12px' }}>
+        <div style={{ fontSize: '11px', fontWeight: 700, color: MUTED, letterSpacing: '0.06em', marginBottom: '7px' }}>やらないこと</div>
+        {menu.doNot.map((item, i) => (
+          <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', marginBottom: i < menu.doNot.length - 1 ? '4px' : 0 }}>
+            <span style={{ fontSize: '12px', color: MUTED, flexShrink: 0, lineHeight: '18px' }}>×</span>
+            <span style={{ fontSize: '13px', color: MUTED, lineHeight: 1.55 }}>{item}</span>
+          </div>
+        ))}
+      </div>
+    </SectionCard>
+  )
+}
+
 // Improvement menu card
 type MenuDef = {
   id: string; title: string; subtitle: string
@@ -1074,7 +1176,8 @@ export default function AnalysisPage() {
   let issues:         Issue[]           = []
   let aiComment:      AIComment | null  = null
   let avgScore  = 0, avgPutts = 0, avgObs = 0, avgFwPct = 0
-  let challenges:     Challenge[]       = []
+  let challenges:     Challenge[]        = []
+  let practiceMenu:   PracticeMenu | null = null
   let hasLimitedData  = false
 
   if (hasData) {
@@ -1088,6 +1191,7 @@ export default function AnalysisPage() {
       avgObs    = avg(recent3.map(s => s.obs))
       avgFwPct  = avg(recent3.map(s => s.fwPct))
       challenges     = buildTodayChallenges(logs[0])
+      practiceMenu   = buildPracticeMenu(challenges)
       const hs0      = logs[0].holes.slice(0, 18)
       hasLimitedData = hs0.filter(h => h.teeShot !== null).length < 9
     } catch {}
@@ -1153,7 +1257,10 @@ export default function AnalysisPage() {
             {/* ② 今日の課題 TOP3 */}
             <TodayChallengesCard challenges={challenges} hasLimitedData={hasLimitedData} />
 
-            {/* ③ 推移グラフ（直近5ラウンド） */}
+            {/* ③ 今日の練習メニュー */}
+            {practiceMenu && <PracticeMenuCard menu={practiceMenu} />}
+
+            {/* ④ 推移グラフ（直近5ラウンド） */}
             <SectionCard accent={FOREST_MID} title="推移グラフ（直近5ラウンド）">
               <TrendChartsSection logs={logs} />
             </SectionCard>
@@ -1196,7 +1303,7 @@ export default function AnalysisPage() {
               </div>
             </SectionCard>
 
-            {/* ③ Issue ranking */}
+            {/* ⑤ Issue ranking */}
             <SectionCard accent={TERRACOTTA} title="課題ランキング">
               <div style={{ margin: '-2px 0' }}>
                 {issues.map((issue, i) => (

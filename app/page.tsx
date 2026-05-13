@@ -90,6 +90,73 @@ function deriveImprovementPoints(log: RoundLog): string[] {
   return points.slice(0, 3)
 }
 
+function deriveTopPractice(log: RoundLog): { theme: string; drills: string[] } | null {
+  const hs         = log.holes.slice(0, 18)
+  const putts      = hs.reduce((s, h) => s + h.putts, 0)
+  const threePutts = hs.filter(h => h.putts >= 3).length
+  const obs        = hs.filter(h => h.teeShot === 'OB').length
+  const rights     = hs.filter(h => h.teeShot === '右').length
+  const lefts      = hs.filter(h => h.teeShot === '左').length
+  const fws        = hs.filter(h => h.teeShot === 'FW').length
+  const fwPct      = Math.round((fws / 18) * 100)
+  const collapse   = hs.slice(9).reduce((s, h) => s + h.score - h.par, 0)
+                   - hs.slice(0, 9).reduce((s, h) => s + h.score - h.par, 0)
+
+  if (obs >= 2) {
+    const dir = rights >= lefts ? '右' : '左'
+    return { theme: `ドライバー${dir}ミス`,
+      drills: ['アライメント確認・セットアップ 10分', 'ハーフスイングで方向性練習 20球', 'フェース管理ドリル 10球'] }
+  }
+  if (putts >= 37 || threePutts >= 4) {
+    return { theme: 'パター距離感',
+      drills: ['1mパット 20球', '5m距離感ドリル 10球', '10m距離感ドリル 10球'] }
+  }
+  if (collapse >= 5) {
+    return { theme: '後半崩れ対策',
+      drills: ['アプローチ30yd以内 20球', 'ルーティーン徹底練習（全球）', '疲労想定の力み対策'] }
+  }
+  if (rights >= 3) {
+    return { theme: 'ドライバー右ミス傾向',
+      drills: ['アライメント確認・セットアップ 10分', 'ハーフスイングで方向性練習 20球', 'フェース管理ドリル 10球'] }
+  }
+  if (lefts >= 3) {
+    return { theme: 'ドライバー左ミス傾向',
+      drills: ['アウトサイドイン矯正ドリル 10分', 'インサイドから振り出す練習 20球', 'フェース向き確認 10球'] }
+  }
+  if (fwPct < 40) {
+    return { theme: 'フェアウェイキープ',
+      drills: ['3WでFWキープ練習 15球', 'UTコントロール 10球', 'ドライバーは最後の5球のみ'] }
+  }
+  if (putts >= 34 || threePutts >= 2) {
+    return { theme: 'パター精度',
+      drills: ['ショートパット反復（1.5〜3m）20球', '5m距離感ドリル 10球', 'ルーティーン確認（全球）'] }
+  }
+  return null
+}
+
+function deriveNextRoundStrategy(log: RoundLog): { headline: string; body: string; isCritical: boolean } | null {
+  const hs = log.holes.slice(0, 18)
+  if (!hs.length) return null
+
+  const obs    = hs.filter(h => h.teeShot === 'OB').length
+  const fws    = hs.filter(h => h.teeShot === 'FW').length
+  const fwPct  = Math.round((fws / Math.max(1, hs.length)) * 100)
+  const putts  = hs.reduce((s, h) => s + h.putts, 0)
+  const front9 = hs.slice(0, 9).reduce((s, h) => s + h.score - h.par, 0)
+  const back9  = hs.slice(9).reduce((s, h) => s + h.score - h.par, 0)
+  const collapse = back9 - front9
+
+  if (obs >= 2)
+    return { headline: 'ドライバー封印が最重要', body: `前回 OB ${obs}回。3W/UT戦略でフェアウェイキープを最優先に。`, isCritical: true }
+  if (fwPct < 40)
+    return { headline: '3W/UT戦略を採用', body: `FW率 ${fwPct}%。距離より方向性を優先してスコアアップを。`, isCritical: false }
+  if (collapse >= 5)
+    return { headline: '前半から抑えた戦略で', body: `前回後半 +${back9}（前半 +${front9}）崩れあり。体力・集中力を温存する前半戦略を。`, isCritical: false }
+  if (putts >= 36)
+    return { headline: 'パター改善が鍵', body: `前回 ${putts}パット。グリーン上での距離感向上でスコアアップ確実。`, isCritical: false }
+  return null
+}
+
 function daysUntil(dateStr: string): number {
   const target = new Date(dateStr)
   const now    = new Date()
@@ -265,6 +332,9 @@ export default function HomePage() {
   const avgPutts      = recentRounds.length ? recentRounds.map(l => calcRoundStats(l).putts).reduce((a, b) => a + b, 0) / recentRounds.length : null
   const avgFwPct      = recentRounds.length ? Math.round(recentRounds.map(l => calcRoundStats(l).fwPct).reduce((a, b) => a + b, 0) / recentRounds.length) : null
   const scoreDiff     = scoreList.length >= 2 ? scoreList[0] - scoreList[1] : null  // negative = improved
+
+  const topPractice         = latestRound ? deriveTopPractice(latestRound) : null
+  const nextRoundStrategy   = latestRound ? deriveNextRoundStrategy(latestRound) : null
 
   const improvPoints  = latestRound ? deriveImprovementPoints(latestRound) : [
     'バックスイングのテンポを落とす',
@@ -532,7 +602,47 @@ export default function HomePage() {
           </CardBody>
         </Card>
 
-        {/* ③ 次回ラウンド予定 ── golf-loop-round-plans */}
+        {/* ③ 今日の練習メニュー */}
+        {mounted && topPractice && (
+          <Card>
+            <CardHeader
+              color={FOREST_LIGHT}
+              label="今日の練習メニュー"
+              icon={
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+                </svg>
+              }
+            />
+            <CardBody>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', backgroundColor: `${TERRACOTTA}12`, borderRadius: '6px', padding: '4px 10px', marginBottom: '12px' }}>
+                <span style={{ fontSize: '10px', fontWeight: 700, color: TERRACOTTA }}>重点テーマ</span>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: TERRACOTTA }}>{topPractice.theme}</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '14px' }}>
+                {topPractice.drills.map((drill, i) => (
+                  <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: FOREST, flexShrink: 0, lineHeight: '18px', minWidth: '14px' }}>{i + 1}.</span>
+                    <span style={{ fontSize: '13px', color: INK, lineHeight: 1.5 }}>{drill}</span>
+                  </div>
+                ))}
+              </div>
+              <Link href="/analysis" style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
+                padding: '10px', borderRadius: '8px',
+                backgroundColor: `${FOREST}08`, border: `1px solid ${FOREST}18`,
+                textDecoration: 'none', fontSize: '13px', color: FOREST, fontWeight: 600,
+              }}>
+                60分メニューも見る
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={FOREST} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9,18 15,12 9,6" />
+                </svg>
+              </Link>
+            </CardBody>
+          </Card>
+        )}
+
+        {/* ④ 次回ラウンド予定 ── golf-loop-round-plans */}
         <Card>
           <CardHeader
             color={TERRACOTTA}
@@ -591,6 +701,52 @@ export default function HomePage() {
             ) : null}
           </CardBody>
         </Card>
+
+        {/* ⑤ 次回ラウンド戦略 AI */}
+        {mounted && nextRoundStrategy && (
+          <Card>
+            <CardHeader
+              color={nextRoundStrategy.isCritical ? TERRACOTTA : FOREST_MID}
+              label="次回ラウンド戦略 AI"
+              icon={
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/>
+                  <line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/>
+                  <line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/>
+                </svg>
+              }
+            />
+            <CardBody>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', marginBottom: '14px' }}>
+                {nextRoundStrategy.isCritical && (
+                  <span style={{ flexShrink: 0, fontSize: '10px', fontWeight: 700, color: TERRACOTTA,
+                    backgroundColor: `${TERRACOTTA}12`, borderRadius: '4px', padding: '2px 7px', marginTop: '2px' }}>
+                    要注意
+                  </span>
+                )}
+                <div>
+                  <div style={{ fontSize: '15px', fontWeight: 700, color: INK, marginBottom: '4px', lineHeight: 1.4 }}>
+                    {nextRoundStrategy.headline}
+                  </div>
+                  <div style={{ fontSize: '13px', color: MUTED, lineHeight: 1.6 }}>
+                    {nextRoundStrategy.body}
+                  </div>
+                </div>
+              </div>
+              <Link href="/round-plan" style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
+                padding: '10px', borderRadius: '8px',
+                backgroundColor: `${FOREST}08`, border: `1px solid ${FOREST}18`,
+                textDecoration: 'none', fontSize: '13px', color: FOREST, fontWeight: 600,
+              }}>
+                詳細戦略を作成する
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={FOREST} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9,18 15,12 9,6" />
+                </svg>
+              </Link>
+            </CardBody>
+          </Card>
+        )}
 
         {/* ④ 直近スコア ── golf-loop-round-logs */}
         <Card>

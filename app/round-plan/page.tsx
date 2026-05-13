@@ -41,8 +41,21 @@ type RoundPlan = {
   savedAt:      string
 }
 
+type HoleData = {
+  par: 3 | 4 | 5; score: number; putts: number
+  teeShot: 'FW' | '左' | '右' | 'OB' | '池' | null; memo: string
+}
+type RoundLog = {
+  id: string; date: string; courseName: string; weather: string
+  targetScore: number; holes: HoleData[]; savedAt: string
+}
+type DataStrategy = {
+  teeShot: string; attack: string; avoid: string; mental: string; oneWord: string; isCritical: boolean
+}
+
 const PLAN_KEY          = 'golf-loop-round-plans'
 const CLUB_DISTANCE_KEY = 'golf-loop-club-distances'
+const ROUND_KEY         = 'golf-loop-round-logs'
 
 // ─── Club distance types & helpers ──────────────────────────────────────────
 type Skill    = '得意' | '普通' | '苦手'
@@ -171,6 +184,74 @@ function generateStrategy(p: Omit<RoundPlan, 'id' | 'savedAt' | 'strategy'>): St
       : baseWord
 
   return { attack, teeShot, aroundGreen, windAdjust, mental, oneWord }
+}
+
+// ─── Data-driven strategy ────────────────────────────────────────────────────
+function buildDataDrivenStrategy(logs: RoundLog[], clubs: ClubDistanceMap): DataStrategy | null {
+  if (!logs.length) return null
+  const log = logs[0]
+  const hs  = log.holes.slice(0, 18)
+  if (!hs.length) return null
+
+  const obs      = hs.filter(h => h.teeShot === 'OB').length
+  const rights   = hs.filter(h => h.teeShot === '右').length
+  const lefts    = hs.filter(h => h.teeShot === '左').length
+  const fws      = hs.filter(h => h.teeShot === 'FW').length
+  const fwPct    = Math.round((fws / Math.max(1, hs.length)) * 100)
+  const putts    = hs.reduce((s, h) => s + h.putts, 0)
+  const front9   = hs.slice(0, 9).reduce((s, h) => s + h.score - h.par, 0)
+  const back9    = hs.slice(9).reduce((s, h) => s + h.score - h.par, 0)
+  const collapse = back9 - front9
+
+  const allClubs   = getSortedClubs(clubs)
+  const skillClubs = allClubs.filter(e => e.skill === '得意')
+  const weakClubs  = allClubs.filter(e => e.skill === '苦手')
+
+  let teeShot    = ''
+  let isCritical = false
+  if (obs >= 2) {
+    isCritical = true
+    const dir  = rights > lefts ? '右' : lefts > rights ? '左' : ''
+    teeShot    = `前回 OB ${obs}回。ドライバー封印を推奨。3W/UTで確実にフェアウェイへ。${dir ? `${dir}ミスが多いので逆サイドを向いてセットアップを。` : ''}`
+  } else if (fwPct < 40) {
+    teeShot = `FW率 ${fwPct}%と低め。3W/UTで刻む選択を積極的に。距離より方向性優先でスコアを作りましょう。`
+  } else {
+    teeShot = `FW率 ${fwPct}%。コンパクトなスイングとルーティーンを守ってフェアウェイキープを継続。`
+  }
+
+  let attack = ''
+  if (skillClubs.length > 0) {
+    const c = skillClubs[0]
+    attack = `得意クラブ「${c.club}」（${c.carry}y）が残る距離にティーショットを運ぶことを最優先に。逆算して落とし場所を決めましょう。`
+  } else if (putts < 34) {
+    attack = 'パット好調。グリーンを捉えて3パットゼロを目標に。ボギーオン2パットを丁寧に積み重ねましょう。'
+  } else {
+    attack = 'ボギーオン2パットを安定させましょう。無理なバーディ狙いより確実なアプローチを優先して。'
+  }
+
+  const avoidParts: string[] = []
+  if (obs >= 2) avoidParts.push('ドライバー強振とOBゾーン方向への打ち出し')
+  if (weakClubs.length > 0) {
+    const wl = weakClubs.slice(0, 2).map(c => c.club).join('・')
+    avoidParts.push(`苦手クラブ「${wl}」が残る距離（前後番手への差し替えで対応）`)
+  }
+  if (!avoidParts.length) avoidParts.push('無謀なピン狙いやハザード越えの強引な攻め')
+  const avoid = avoidParts.join('、') + 'を避けましょう。'
+
+  let mental = ''
+  if (collapse >= 5) {
+    mental = `前回後半 +${back9}（前半 +${front9}）と崩れる傾向あり。前半は無理せず抑えめに。後半も体力・集中力を温存した戦略で。`
+  } else {
+    mental = '1ホールごとに完全リセット。ミスの後こそ深呼吸し、前のホールを手放してプロセスに集中しましょう。'
+  }
+
+  let oneWord = ''
+  if (obs >= 2)               oneWord = 'フェアウェイが最強の武器。'
+  else if (collapse >= 5)     oneWord = '前半で貯金、後半も笑顔で。'
+  else if (skillClubs.length) oneWord = `得意の${skillClubs[0].club}を活かして攻める。`
+  else                        oneWord = '丁寧なゴルフが最高のスコアを生む。'
+
+  return { teeShot, attack, avoid, mental, oneWord, isCritical }
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -428,6 +509,60 @@ function HistoryItem({ plan }: { plan: RoundPlan }) {
   )
 }
 
+// ─── Data-driven strategy card component ────────────────────────────────────
+function DataDrivenStrategyCard({ strategy, logDate }: { strategy: DataStrategy; logDate: string }) {
+  const teeAccent = strategy.isCritical ? TERRACOTTA : FOREST_MID
+  return (
+    <div style={{ backgroundColor: CARD, borderRadius: '12px', boxShadow: '0 2px 16px rgba(28,66,48,0.1)', overflow: 'hidden' }}>
+      <div style={{ height: '3px', background: strategy.isCritical
+        ? `linear-gradient(90deg, ${TERRACOTTA}, ${GOLD})`
+        : `linear-gradient(90deg, ${FOREST}, ${FOREST_LIGHT}, ${GOLD})` }} />
+      <div style={{ padding: '16px 16px 18px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+          <div style={{ width: '26px', height: '26px', borderRadius: '6px', backgroundColor: `${FOREST}12`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={FOREST} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/>
+              <line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/>
+              <line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/>
+            </svg>
+          </div>
+          <div style={{ flex: 1 }}>
+            <span style={{ fontSize: '13px', fontWeight: 700, color: FOREST }}>データ戦略 AI</span>
+            <span style={{ fontSize: '11px', color: MUTED, marginLeft: '6px' }}>{logDate} ラウンドより</span>
+          </div>
+          {strategy.isCritical && (
+            <span style={{ fontSize: '10px', fontWeight: 700, color: TERRACOTTA,
+              backgroundColor: `${TERRACOTTA}12`, borderRadius: '4px', padding: '2px 7px' }}>
+              要注意
+            </span>
+          )}
+        </div>
+
+        <div style={{ borderTop: `1px solid ${SAND_LIGHT}` }}>
+          <StratRow accent={teeAccent} label="ティーショット戦略" text={strategy.teeShot}
+            icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={teeAccent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="6" y1="3" x2="6" y2="21"/><path d="M6 4L17 7.5L6 11V4Z"/></svg>}
+          />
+          <StratRow accent={FOREST} label="狙うべきこと" text={strategy.attack}
+            icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={FOREST} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>}
+          />
+          <StratRow accent={TERRACOTTA} label="避けるべきこと" text={strategy.avoid}
+            icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={TERRACOTTA} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>}
+          />
+          <StratRow accent={GOLD} label="メンタルテーマ" text={strategy.mental}
+            icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>}
+          />
+        </div>
+
+        <div style={{ marginTop: '14px', backgroundColor: FOREST, borderRadius: '8px', padding: '10px 14px' }}>
+          <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px', letterSpacing: '0.1em', marginBottom: '4px' }}>今日の一言</div>
+          <div style={{ color: '#fff', fontSize: '14px', fontWeight: 700, fontStyle: 'italic' }}>「{strategy.oneWord}」</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 const WEATHER_PRESETS = [
   { id: '☀️ 晴れ',        val: '晴れ' },
@@ -452,20 +587,26 @@ export default function RoundPlanPage() {
   const [plans,        setPlans]        = useState<RoundPlan[]>([])
   const [successSheet,   setSuccessSheet]   = useState(false)
   const [clubDistances,  setClubDistances]  = useState<ClubDistanceMap>({})
+  const [roundLogs,      setRoundLogs]      = useState<RoundLog[]>([])
   const stratRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let parsed: RoundPlan[]    = []
     let clubs:  ClubDistanceMap = {}
+    let rounds: RoundLog[]      = []
     try {
       const raw  = localStorage.getItem(PLAN_KEY)
       if (raw)   parsed = JSON.parse(raw)
       const rawC = localStorage.getItem(CLUB_DISTANCE_KEY)
       if (rawC)  clubs  = JSON.parse(rawC)
+      const rawR = localStorage.getItem(ROUND_KEY)
+      if (rawR)  rounds = JSON.parse(rawR)
+      rounds.sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime())
     } catch {}
     startTransition(() => {
       setPlans(parsed)
       setClubDistances(clubs)
+      setRoundLogs(rounds)
     })
   }, [])
 
@@ -493,7 +634,8 @@ export default function RoundPlanPage() {
     setSuccessSheet(true)
   }
 
-  const windNum = parseFloat(windSpeed) || 0
+  const windNum      = parseFloat(windSpeed) || 0
+  const dataStrategy = buildDataDrivenStrategy(roundLogs, clubDistances)
 
   return (
     <div style={{ maxWidth: '480px', margin: '0 auto', minHeight: '100dvh', backgroundColor: CREAM }}>
@@ -562,6 +704,14 @@ export default function RoundPlanPage() {
       )}
 
       <main style={{ padding: '18px 16px 110px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+
+        {/* ─── Data-driven strategy (auto, from round logs) ─── */}
+        {dataStrategy && (
+          <DataDrivenStrategyCard
+            strategy={dataStrategy}
+            logDate={roundLogs[0] ? formatDate(roundLogs[0].date) : ''}
+          />
+        )}
 
         {/* ─── Form section 1: コース情報 ─── */}
         <SectionCard accent={FOREST} title="コース情報">
