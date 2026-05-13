@@ -3,8 +3,9 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
-const FOREST = '#1C4230'
-const MUTED = '#9BA090'
+const FOREST     = '#1C4230'
+const TERRACOTTA = '#C0522D'
+const MUTED      = '#9BA090'
 
 function IconHome({ active }: { active: boolean }) {
   const c = active ? FOREST : MUTED
@@ -53,6 +54,19 @@ function IconFlag({ active }: { active: boolean }) {
   )
 }
 
+function IconLive({ active }: { active: boolean }) {
+  const c = active ? TERRACOTTA : MUTED
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5.6 5.6a9.5 9.5 0 0 0 0 12.8" />
+      <path d="M18.4 5.6a9.5 9.5 0 0 1 0 12.8" />
+      <path d="M8.8 8.8a5 5 0 0 0 0 6.4" />
+      <path d="M15.2 8.8a5 5 0 0 1 0 6.4" />
+      <circle cx="12" cy="12" r="1.8" fill={c} stroke="none" />
+    </svg>
+  )
+}
+
 function IconChart({ active }: { active: boolean }) {
   const c = active ? FOREST : MUTED
   return (
@@ -68,11 +82,12 @@ function IconChart({ active }: { active: boolean }) {
 }
 
 const navItems = [
-  { href: '/', label: 'ホーム', Icon: IconHome },
-  { href: '/practice', label: '練習ログ', Icon: IconLog },
-  { href: '/swing', label: 'スイング', Icon: IconSwing },
-  { href: '/round-plan', label: 'ラウンド準備', Icon: IconFlag },
-  { href: '/analysis', label: 'スコア分析', Icon: IconChart },
+  { href: '/',           label: 'ホーム',    Icon: IconHome,  activeColor: FOREST },
+  { href: '/practice',   label: '練習ログ',  Icon: IconLog,   activeColor: FOREST },
+  { href: '/swing',      label: 'スイング',  Icon: IconSwing, activeColor: FOREST },
+  { href: '/round-plan', label: '準備',      Icon: IconFlag,  activeColor: FOREST },
+  { href: '/round-live', label: 'LIVE',      Icon: IconLive,  activeColor: TERRACOTTA },
+  { href: '/analysis',   label: '分析',      Icon: IconChart, activeColor: FOREST },
 ]
 
 export default function BottomNav() {
@@ -94,7 +109,7 @@ export default function BottomNav() {
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
-      {navItems.map(({ href, label, Icon }) => {
+      {navItems.map(({ href, label, Icon, activeColor }) => {
         const active = pathname === href
         return (
           <Link
@@ -110,9 +125,9 @@ export default function BottomNav() {
               paddingBottom: '10px',
               gap: '3px',
               textDecoration: 'none',
-              color: active ? FOREST : MUTED,
+              color: active ? activeColor : MUTED,
               fontSize: '10px',
-              fontWeight: active ? 500 : 400,
+              fontWeight: active ? 600 : 400,
               letterSpacing: '0.01em',
             }}
           >

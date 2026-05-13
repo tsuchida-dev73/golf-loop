@@ -857,7 +857,6 @@ export default function AnalysisPage() {
   const [logs,          setLogs]          = useState<RoundLog[]>([])
   const [practiceLogs,  setPracticeLogs]  = useState<PracticeLog[]>([])
   const [clubDistances, setClubDistances] = useState<ClubDistanceMap>({})
-  const [ready,         setReady]         = useState(false)
 
   useEffect(() => {
     let rounds:    RoundLog[]      = []
@@ -890,7 +889,6 @@ export default function AnalysisPage() {
     setLogs(rounds)
     setPracticeLogs(practices)
     setClubDistances(clubs)
-    setReady(true)
   }, [])
 
   const hasData = logs.length > 0
@@ -931,13 +929,9 @@ export default function AnalysisPage() {
 
       <main style={{ padding: '18px 16px 110px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
-        {!ready && (
-          <div style={{ textAlign: 'center', padding: '40px', color: MUTED }}>読み込み中...</div>
-        )}
+        {(!hasData || !latest) && <EmptyState />}
 
-        {ready && !hasData && <EmptyState />}
-
-        {ready && hasData && latest && (
+        {hasData && latest && (
           <>
             {/* ① Latest round summary */}
             <SectionCard accent={FOREST} title="直近ラウンドのサマリー">

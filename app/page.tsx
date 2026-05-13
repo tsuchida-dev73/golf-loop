@@ -41,6 +41,7 @@ type RoundPlan = {
 const PRACTICE_KEY = 'golf-loop-practice-logs'
 const ROUND_KEY    = 'golf-loop-round-logs'
 const PLAN_KEY     = 'golf-loop-round-plans'
+const LIVE_KEY     = 'golf-loop-live-round'
 
 const CATEGORY_LABEL: Record<Category, string> = {
   driver: 'ドライバー', iron: 'アイアン', approach: 'アプローチ', putter: 'パター',
@@ -156,10 +157,14 @@ function QuickActionsBar() {
       ),
     },
     {
-      href: '/round', label: 'ラウンド',
+      href: '/round-live', label: 'ラウンド中',
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={TERRACOTTA} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="22,12 18,12 15,21 9,3 6,12 2,12" />
+          <path d="M5.6 5.6a9.5 9.5 0 0 0 0 12.8" />
+          <path d="M18.4 5.6a9.5 9.5 0 0 1 0 12.8" />
+          <path d="M8.8 8.8a5 5 0 0 0 0 6.4" />
+          <path d="M15.2 8.8a5 5 0 0 1 0 6.4" />
+          <circle cx="12" cy="12" r="2" fill={TERRACOTTA} stroke="none" />
         </svg>
       ),
     },
@@ -215,6 +220,7 @@ export default function HomePage() {
   const [practiceLogs, setPracticeLogs] = useState<PracticeLog[]>([])
   const [roundLogs,    setRoundLogs]    = useState<RoundLog[]>([])
   const [roundPlans,   setRoundPlans]   = useState<RoundPlan[]>([])
+  const [liveRound,    setLiveRound]    = useState<{ score: number; holes: number } | null>(null)
 
   useEffect(() => {
     let practices: PracticeLog[] = []
@@ -228,6 +234,16 @@ export default function HomePage() {
       rounds    = r  ? JSON.parse(r)  : []
       rounds.sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime())
       plans     = pl ? JSON.parse(pl) : []
+      const lv = localStorage.getItem(LIVE_KEY)
+      if (lv) {
+        const ld = JSON.parse(lv)
+        const hs = Array.isArray(ld.holes) ? ld.holes : []
+        const score = hs.reduce((s: number, h: { score: number }) => s + h.score, 0)
+        const filled = hs.filter((h: { teeShot: string | null; putts: number }) =>
+          h.teeShot !== null || h.putts !== 2
+        ).length
+        setLiveRound({ score, holes: filled })
+      }
     } catch {}
     startTransition(() => {
       setPracticeLogs(practices)
@@ -329,6 +345,79 @@ export default function HomePage() {
       <QuickActionsBar />
 
       <main style={{ padding: '14px 16px 100px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+
+        {/* ラウンド中モード */}
+        <Link href="/round-live" style={{
+          display: 'flex', alignItems: 'center', gap: '14px',
+          backgroundColor: liveRound ? TERRACOTTA : CARD,
+          borderRadius: '14px', padding: '16px 18px', textDecoration: 'none',
+          boxShadow: liveRound
+            ? `0 4px 18px ${TERRACOTTA}45`
+            : '0 2px 12px rgba(28,66,48,0.08)',
+          border: liveRound ? 'none' : `1.5px solid ${SAND_LIGHT}`,
+        }}>
+          <div style={{
+            width: '46px', height: '46px', borderRadius: '13px', flexShrink: 0,
+            backgroundColor: liveRound ? 'rgba(255,255,255,0.2)' : `${TERRACOTTA}12`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+              stroke={liveRound ? '#fff' : TERRACOTTA}
+              strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5.6 5.6a9.5 9.5 0 0 0 0 12.8" />
+              <path d="M18.4 5.6a9.5 9.5 0 0 1 0 12.8" />
+              <path d="M8.8 8.8a5 5 0 0 0 0 6.4" />
+              <path d="M15.2 8.8a5 5 0 0 1 0 6.4" />
+              <circle cx="12" cy="12" r="2" fill={liveRound ? '#fff' : TERRACOTTA} stroke="none" />
+            </svg>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '15px', fontWeight: 700, color: liveRound ? '#fff' : INK, marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              ラウンド中モード
+              {liveRound && (
+                <span style={{ fontSize: '10px', fontWeight: 700, backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: '8px', padding: '2px 7px', color: '#fff', letterSpacing: '0.08em' }}>
+                  LIVE
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: '12px', color: liveRound ? 'rgba(255,255,255,0.75)' : MUTED }}>
+              {mounted && liveRound
+                ? `進行中 — スコア ${liveRound.score}（${liveRound.holes}H 入力済）`
+                : 'スマホ片手で素早くスコア入力'}
+            </div>
+          </div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke={liveRound ? 'rgba(255,255,255,0.7)' : MUTED}
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9,18 15,12 9,6" />
+          </svg>
+        </Link>
+
+        {/* ラウンド記録 */}
+        <Link href="/round" style={{
+          display: 'flex', alignItems: 'center', gap: '12px',
+          backgroundColor: CARD, borderRadius: '12px', padding: '14px 16px',
+          textDecoration: 'none', boxShadow: '0 2px 12px rgba(28,66,48,0.08)',
+        }}>
+          <div style={{
+            width: '42px', height: '42px', borderRadius: '10px', flexShrink: 0,
+            backgroundColor: `${FOREST_MID}12`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={FOREST_MID} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="4" y="3" width="16" height="18" rx="2" />
+              <line x1="8" y1="9" x2="16" y2="9" />
+              <line x1="8" y1="13" x2="16" y2="13" />
+              <line x1="8" y1="17" x2="12" y2="17" />
+            </svg>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '14px', fontWeight: 700, color: INK, marginBottom: '2px' }}>ラウンド記録</div>
+            <div style={{ fontSize: '12px', color: MUTED }}>終了後にスコアをまとめて入力</div>
+          </div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9,18 15,12 9,6" />
+          </svg>
+        </Link>
 
         {/* 番手別飛距離ショートカット */}
         <Link href="/club-distance" style={{
