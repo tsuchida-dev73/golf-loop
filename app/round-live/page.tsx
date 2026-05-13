@@ -450,6 +450,10 @@ export default function RoundLivePage() {
               display: 'block', textAlign: 'center', padding: '16px', borderRadius: '12px',
               backgroundColor: TERRACOTTA, color: '#fff', fontSize: '15px', fontWeight: 700, textDecoration: 'none',
             }}>今日の課題を見る</Link>
+            <Link href="/best-shot" style={{
+              display: 'block', textAlign: 'center', padding: '14px', borderRadius: '12px',
+              backgroundColor: GOLD, color: '#fff', fontSize: '14px', fontWeight: 700, textDecoration: 'none',
+            }}>ベストショットを残す</Link>
             <Link href="/" style={{
               display: 'block', textAlign: 'center', padding: '14px', borderRadius: '12px',
               border: `1.5px solid ${SAND_LIGHT}`, color: MUTED, fontSize: '14px', textDecoration: 'none',

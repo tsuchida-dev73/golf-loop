@@ -37,11 +37,16 @@ type RoundPlan = {
   targetScore: number; cautions: string; recentIssues: string
   strategy: Strategy; savedAt: string
 }
+type BestShot = {
+  id: string; date: string; courseName: string; hole: string; club: string
+  shotType: string; memo: string; mood: string; savedAt: string
+}
 
-const PRACTICE_KEY = 'golf-loop-practice-logs'
-const ROUND_KEY    = 'golf-loop-round-logs'
-const PLAN_KEY     = 'golf-loop-round-plans'
-const LIVE_KEY     = 'golf-loop-live-round'
+const PRACTICE_KEY  = 'golf-loop-practice-logs'
+const ROUND_KEY     = 'golf-loop-round-logs'
+const PLAN_KEY      = 'golf-loop-round-plans'
+const LIVE_KEY      = 'golf-loop-live-round'
+const BEST_SHOT_KEY = 'golf-loop-best-shots'
 
 const CATEGORY_LABEL: Record<Category, string> = {
   driver: 'ドライバー', iron: 'アイアン', approach: 'アプローチ', putter: 'パター',
@@ -288,6 +293,7 @@ export default function HomePage() {
   const [roundLogs,    setRoundLogs]    = useState<RoundLog[]>([])
   const [roundPlans,   setRoundPlans]   = useState<RoundPlan[]>([])
   const [liveRound,    setLiveRound]    = useState<{ score: number; holes: number } | null>(null)
+  const [bestShots,    setBestShots]    = useState<BestShot[]>([])
 
   useEffect(() => {
     let practices: PracticeLog[] = []
@@ -311,6 +317,8 @@ export default function HomePage() {
         ).length
         setLiveRound({ score, holes: filled })
       }
+      const bs = localStorage.getItem(BEST_SHOT_KEY)
+      if (bs) setBestShots(JSON.parse(bs))
     } catch {}
     startTransition(() => {
       setPracticeLogs(practices)
@@ -333,8 +341,9 @@ export default function HomePage() {
   const avgFwPct      = recentRounds.length ? Math.round(recentRounds.map(l => calcRoundStats(l).fwPct).reduce((a, b) => a + b, 0) / recentRounds.length) : null
   const scoreDiff     = scoreList.length >= 2 ? scoreList[0] - scoreList[1] : null  // negative = improved
 
-  const topPractice         = latestRound ? deriveTopPractice(latestRound) : null
-  const nextRoundStrategy   = latestRound ? deriveNextRoundStrategy(latestRound) : null
+  const topPractice       = latestRound ? deriveTopPractice(latestRound) : null
+  const nextRoundStrategy = latestRound ? deriveNextRoundStrategy(latestRound) : null
+  const latestShot        = bestShots[0] ?? null
 
   const improvPoints  = latestRound ? deriveImprovementPoints(latestRound) : [
     'バックスイングのテンポを落とす',
@@ -602,7 +611,71 @@ export default function HomePage() {
           </CardBody>
         </Card>
 
-        {/* ③ 今日の練習メニュー */}
+        {/* ③ 最近のベストショット */}
+        <Card>
+          <CardHeader
+            color="#A08018"
+            label="最近のベストショット"
+            sub={latestShot ? formatJpDate(latestShot.date) : undefined}
+            icon={
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>
+              </svg>
+            }
+          />
+          <CardBody>
+            {mounted && latestShot ? (
+              <>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginBottom: '8px' }}>
+                  {latestShot.mood && (
+                    <span style={{
+                      fontSize: '11px', fontWeight: 700, borderRadius: '4px', padding: '2px 7px',
+                      color: latestShot.mood === '最高' ? '#A08018' : latestShot.mood === 'しびれた' ? TERRACOTTA : FOREST_MID,
+                      backgroundColor: latestShot.mood === '最高' ? '#C9A82418' : latestShot.mood === 'しびれた' ? `${TERRACOTTA}15` : `${FOREST_MID}15`,
+                    }}>
+                      {latestShot.mood === '最高' ? '最高！' : latestShot.mood === 'よかった' ? 'よかった' : latestShot.mood === '成長実感' ? '成長実感' : 'しびれた'}
+                    </span>
+                  )}
+                  {latestShot.club && (
+                    <span style={{ fontSize: '11px', color: MUTED, backgroundColor: '#FAF8F0',
+                      borderRadius: '4px', padding: '2px 7px', border: `1px solid ${SAND_LIGHT}` }}>
+                      {latestShot.club}
+                    </span>
+                  )}
+                  {latestShot.courseName && (
+                    <span style={{ fontSize: '11px', color: FOREST_MID, backgroundColor: `${FOREST}0D`,
+                      borderRadius: '4px', padding: '2px 7px', fontWeight: 500 }}>
+                      {latestShot.courseName}
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: '16px', fontWeight: 700, color: INK, lineHeight: 1.45, marginBottom: '12px' }}>
+                  {latestShot.memo}
+                </div>
+                <Link href="/best-shot" style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
+                  padding: '10px', borderRadius: '8px',
+                  backgroundColor: '#C9A82410', border: '1px solid #C9A82428',
+                  textDecoration: 'none', fontSize: '13px', color: '#8A7010', fontWeight: 600,
+                }}>
+                  もっと記録する
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9,18 15,12 9,6" />
+                  </svg>
+                </Link>
+              </>
+            ) : mounted ? (
+              <NoDataLink
+                text="ナイスショットの瞬間を記録して自信につなげましょう。"
+                href="/best-shot"
+                color="#A08018"
+                actionLabel="今日のナイスショットを残す"
+              />
+            ) : null}
+          </CardBody>
+        </Card>
+
+        {/* ④ 今日の練習メニュー */}
         {mounted && topPractice && (
           <Card>
             <CardHeader

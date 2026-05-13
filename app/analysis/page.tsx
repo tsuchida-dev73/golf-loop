@@ -1509,6 +1509,41 @@ export default function AnalysisPage() {
             </div>
           </>
         )}
+
+        {/* ─── ベストショット導線 ─── */}
+        <div style={{ backgroundColor: '#FFFFFF', borderRadius: '12px', boxShadow: '0 2px 12px rgba(28,66,48,0.08)', overflow: 'hidden' }}>
+          <div style={{ height: '3px', background: 'linear-gradient(90deg, #C9A824, #A08018)' }} />
+          <div style={{ padding: '18px 16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: '#C9A82415',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C9A824" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>
+                </svg>
+              </div>
+              <div>
+                <div style={{ fontSize: '14px', fontWeight: 700, color: '#1C1C1C', marginBottom: '2px' }}>
+                  良かったことも残す
+                </div>
+                <div style={{ fontSize: '12px', color: '#6B7060', lineHeight: 1.55 }}>
+                  課題だけでなく、良いショットを記録して自信につなげましょう
+                </div>
+              </div>
+            </div>
+            <Link href="/best-shot" style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+              padding: '13px', borderRadius: '10px',
+              background: 'linear-gradient(135deg, #C9A824, #A08018)',
+              textDecoration: 'none', fontSize: '14px', fontWeight: 700, color: '#fff',
+              boxShadow: '0 3px 14px rgba(201,168,36,0.4)',
+            }}>
+              ベストショットを記録する
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9,18 15,12 9,6" />
+              </svg>
+            </Link>
+          </div>
+        </div>
       </main>
 
       <BottomNav />

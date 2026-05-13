@@ -575,6 +575,11 @@ export default function RoundPage() {
               backgroundColor: TERRACOTTA, color: '#fff', fontSize: '14px', fontWeight: 700,
               textDecoration: 'none', marginBottom: '16px',
             }}>今日の課題を見る</Link>
+            <Link href="/best-shot" onClick={() => setSuccessSheet(false)} style={{
+              display: 'block', textAlign: 'center', padding: '14px', borderRadius: '12px',
+              backgroundColor: '#C9A824', color: '#fff', fontSize: '14px', fontWeight: 700,
+              textDecoration: 'none', marginBottom: '16px',
+            }}>ベストショットを残す</Link>
             <div style={{ fontSize: '11px', fontWeight: 700, color: '#6B7060', letterSpacing: '0.08em', marginBottom: '10px' }}>次のステップ</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {[
