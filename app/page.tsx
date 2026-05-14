@@ -15,6 +15,11 @@ const INK          = '#1C1C1C'
 const MUTED        = '#6B7060'
 
 // ── Types (mirror storage schemas – do not modify) ──────────────────────────
+type HomeTimelineEntry =
+  | { type: 'practice'; data: PracticeLog; sortKey: string }
+  | { type: 'round';    data: RoundLog;    sortKey: string }
+  | { type: 'bestShot'; data: BestShot;    sortKey: string }
+
 type Category = 'driver' | 'iron' | 'approach' | 'putter'
 type PracticeLog = {
   id: string; date: string; categories: Category[]
@@ -344,6 +349,12 @@ export default function HomePage() {
   const topPractice       = latestRound ? deriveTopPractice(latestRound) : null
   const nextRoundStrategy = latestRound ? deriveNextRoundStrategy(latestRound) : null
   const latestShot        = bestShots[0] ?? null
+
+  const recentDiary: HomeTimelineEntry[] = [
+    ...practiceLogs.map(data => ({ type: 'practice' as const, data, sortKey: data.savedAt || data.date })),
+    ...roundLogs.map(data    => ({ type: 'round'    as const, data, sortKey: data.savedAt || data.date })),
+    ...bestShots.map(data    => ({ type: 'bestShot' as const, data, sortKey: data.savedAt || data.date })),
+  ].sort((a, b) => new Date(b.sortKey).getTime() - new Date(a.sortKey).getTime()).slice(0, 3)
 
   const improvPoints  = latestRound ? deriveImprovementPoints(latestRound) : [
     'バックスイングのテンポを落とす',
@@ -898,6 +909,83 @@ export default function HomePage() {
               </>
             ) : mounted ? (
               <NoDataLink text="ラウンドを記録するとスコアの推移が表示されます。" href="/round" actionLabel="ラウンドを記録" />
+            ) : null}
+          </CardBody>
+        </Card>
+
+        {/* 最近のゴルフ日記 */}
+        <Card>
+          <CardHeader
+            color="#4A6A5A"
+            label="最近のゴルフ日記"
+            icon={
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+              </svg>
+            }
+          />
+          <CardBody>
+            {mounted && recentDiary.length > 0 ? (
+              <>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {recentDiary.map((entry, i) => {
+                    const typeConfig = entry.type === 'practice'
+                      ? { label: '練習',          color: TERRACOTTA }
+                      : entry.type === 'round'
+                      ? { label: 'ラウンド',       color: FOREST }
+                      : { label: 'ベストショット', color: '#A08018' }
+                    const title = entry.type === 'practice'
+                      ? (entry.data.theme       || '練習記録')
+                      : entry.type === 'round'
+                      ? (entry.data.courseName  || 'ラウンド記録')
+                      : (entry.data.memo        || 'ベストショット')
+                    return (
+                      <div key={`${entry.type}-${entry.data.id}`} style={{
+                        display: 'flex', alignItems: 'center', gap: '10px',
+                        padding: '10px 0',
+                        borderTop: i > 0 ? `1px solid ${SAND_LIGHT}` : 'none',
+                      }}>
+                        <span style={{
+                          flexShrink: 0, fontSize: '10px', fontWeight: 700,
+                          color: typeConfig.color, backgroundColor: `${typeConfig.color}14`,
+                          borderRadius: '4px', padding: '2px 7px',
+                        }}>
+                          {typeConfig.label}
+                        </span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{
+                            fontSize: '13px', fontWeight: 600, color: INK,
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          }}>
+                            {title}
+                          </div>
+                          <div style={{ fontSize: '11px', color: MUTED, marginTop: '1px' }}>
+                            {formatJpDate(entry.data.date)}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                <Link href="/timeline" style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
+                  marginTop: '10px', padding: '10px', borderRadius: '8px',
+                  backgroundColor: `${FOREST}08`, border: `1px solid ${FOREST}18`,
+                  textDecoration: 'none', fontSize: '13px', color: FOREST, fontWeight: 600,
+                }}>
+                  すべて見る
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={FOREST} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9,18 15,12 9,6" />
+                  </svg>
+                </Link>
+              </>
+            ) : mounted ? (
+              <NoDataLink
+                text="まだ記録がありません。練習やラウンドを記録してみましょう。"
+                href="/timeline"
+                actionLabel="タイムラインを見る"
+              />
             ) : null}
           </CardBody>
         </Card>
